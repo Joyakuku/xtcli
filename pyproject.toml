@@ -1,0 +1,48 @@
+[project]
+name = "xtcli"
+version = "0.2.0"
+description = "嵌入式工程 CLI —— 初始化 / 构建 / 烧录, 按工具链生态划分后端"
+requires-python = ">=3.11"
+# 运行时零第三方依赖: 只用标准库。这样 venv 建好即可用, 全程可离线,
+# 也不会因为依赖升级而漂移。
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.10"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+xtcli = ["assets/**/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "DTZ"]
+ignore = [
+    # 注释里有中文说明, 硬断行反而更难读
+    "E501",
+    # RUF001/2/3 检查"全角标点歧义" —— 对中文注释/文档字符串无意义
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试需要先改 sys.path 再 import support, 所以 E402 与导入块排序在这里是预期的
+"tests/*" = ["E402", "I001", "SIM117"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+ignore_missing_imports = true

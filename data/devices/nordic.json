@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "vendor": "Nordic Semiconductor",
+  "_comment": [
+    "xtcli 的 Nordic nRF 设备数据表 (暂存稿) —— 只放数据, 不放逻辑。",
+    "用途: 给 nRF52/nRF53/nRF91 工程补 -mcpu/-mfpu, 给出 openocd target 与烧录基址。",
+    "来源规则: 每个 cpu/fpu 的依据写在 families.<系列>._source; 每个容量数字的依据写在 _memory_comment 与 memory.<系列>._note; 查不到的键一律不写。",
+    "本表数字经过**三处独立来源交叉核对** (不是单一来源的转述):",
+    "  (1) 本机 pyOCD 0.45.1 内置 target 定义 (E:\\env\\xtcli\\.venv-pyocd\\Lib\\site-packages\\pyocd\\target\\builtin\\target_nRF52840_xxAA.py / target_nRF52832_xxAA.py / target_nRF52833_xxAA.py / target_nRF91xx.py), 里面是精确的十六进制 FlashRegion/RamRegion;",
+    "  (2) Arm Keil 器件数据库 (https://www.keil.arm.com/devices/nordic-semiconductor-<型号>-xxaa/processors/), 由 Nordic 官方 nRF_DeviceFamilyPack 生成, 逐型号给出 Core 与 Floating Point Unit 行 (SP_FPU / NO_FPU);",
+    "  (3) Nordic 官方产品规格 (nRF52840/nRF52832/nRF52833/nRF52810/nRF52811/nRF5340/nRF9160 Product Specification) —— docs.nordicsemi.com 对本机自动抓取返回 403, 所以数字以 (1)(2) 为准, 官方规格仅作为型号归属与整体规格的对照。",
+    "Keil 的内存数字是十进制写法 ('524.29 kbyte' = 524288 B, '1.05 Mbyte' = 1048576 B), 本表一律写成精确字节数, 换算过程见 _memory_comment。",
+    "families: 七个系列键全部以数字结尾, 不触发 devices.py 的 subseries 守卫, 无需 subseries 声明。键取'不带后缀的系列名' (NRF52840), 因为 xtcli 是**最长前缀匹配**: NRF52840_XXAA / nRF52840-QIAA 等写法都能命中。",
+    "ocd: 本机 OpenOCD 0.12.0 的 scripts/target 目录里只有 nrf51.cfg 与 nrf52.cfg 两个 Nordic target (已用 pwsh 列目录核对)。因此 nRF52840/52832/52833/52810/52811 用 target/nrf52.cfg; NRF5340 与 NRF9160 写 null —— 没有 nrf53.cfg / nrf91.cfg, 拿 nrf52.cfg 顶替是未经验证的猜测 (nRF53/nRF91 是 Cortex-M33 + 不同的 CTRL-AP/APPROTECT 机制)。",
+    "probes: 只登记本机 scripts\\interface 里确实存在的 cfg。Nordic 开发板 (nRF52/53 DK, nRF9160 DK) 板载调试器是 J-Link OB, 故 jlink 排第一; 其次是 CMSIS-DAP (DAPLink / nRF Connect Programmer 派生的探针)。stlink.cfg 本机也存在, 且 nrf52.cfg 里明确写了 ST-Link 这类 adapter 可以连但**无法访问 CTRL-AP**, 也就是 nrf52_recover 解不开被 APPROTECT 锁住的芯片, 因此不放进默认探测顺序。",
+    "flashBase 0x00000000: Nordic 把代码 flash 映射在地址 0 (不是 STM32 的 0x08000000)。依据: 本机 target/nrf52.cfg 第 'flash bank $_CHIPNAME.flash nrf5 0x00000000 0 1 1' 行; pyOCD 内置 target 里 nRF52840/52832/52833/9160 的 FlashRegion(start=0x0); nRF5340 应用核 flash 同样从 0x00000000 起 (标准映射)。系列间无需覆盖, 故只用表级默认值。",
+    "ramBase 0x20000000: pyOCD 内置 target 里这些器件的 RamRegion 都从 0x20000000 起 (nRF52833 另外有一个 0x00800000 的 code_ram 别名区)。",
+    "故意没写的键: (1) devicePattern: Nordic 型号里没有'容量码'可切 (nRF52840 的 40 是系列号, 不是容量), 写了会把型号位当容量码, 整键不写。(2) density / arch / abi: 未查证 xtcli 对 Nordic 的取值约定, 不写。(3) nRF52820 / nRF52805 / nRF54L / nRF9151 等未列在需求里的型号一条都不写 —— 没有逐型号核对内核。(4) 本表不含任何 NXP/i.MX RT 条目。"
+  ],
+  "families": {
+    "NRF52840": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/nrf52.cfg",
+      "_source": "https://www.keil.arm.com/devices/nordic-semiconductor-nrf52840-xxaa/processors/ (Core=Cortex-M4 64 MHz, Floating Point Unit=SP_FPU); 本机 pyOCD target_nRF52840_xxAA.py (FlashRegion 0x0 len 0x100000, RamRegion 0x20000000 len 0x40000)",
+      "_note": "Cortex-M4F: 有单精度 FPU (FPv4-SP), 故 fpv4-sp-d16 + hard —— 这是需求里点名要核对的点, 三处来源一致 (Keil SP_FPU / pyOCD 的 NRF52 family / Nordic 规格 'Cortex-M4 with FPU')。ocd 依据: 本机 target/nrf52.cfg 文件头自称 'Nordic nRF52 series: ARM Cortex-M4 @ 64 MHz', 用通用 nrf5 flash 驱动。"
+    },
+    "NRF52832": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/nrf52.cfg",
+      "_source": "https://www.keil.arm.com/devices/nordic-semiconductor-nrf52832-xxaa/processors/ (Core=Cortex-M4 64 MHz, Floating Point Unit=SP_FPU, Flash 524.29 kbyte, RAM 65.54 kbyte); 本机 pyOCD target_nRF52832_xxAA.py (FlashRegion 0x0 len 0x80000, RamRegion 0x20000000 len 0x10000)",
+      "_note": "Cortex-M4F, 与 nRF52840 同内核同 FPU 档位。Keil 与 pyOCD 都只登记 512 kB flash / 64 kB RAM 的 nRF52832_xxAA 一个规格。"
+    },
+    "NRF52833": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/nrf52.cfg",
+      "_source": "https://www.keil.arm.com/devices/nordic-semiconductor-nrf52833-xxaa/processors/ (Core=Cortex-M4 64 MHz, Floating Point Unit=SP_FPU, Flash 524.29 kbyte, RAM 131.07 kbyte); 本机 pyOCD target_nRF52833_xxAA.py (FlashRegion 0x0 len 0x80000, RamRegion 0x20000000 len 0x20000)",
+      "_note": "Cortex-M4F, 与 nRF52832 同 flash 容量但 RAM 翻倍 (128 kB)。ocd 同 nRF52 系列。"
+    },
+    "NRF52810": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/nrf52.cfg",
+      "_source": "https://www.keil.arm.com/devices/nordic-semiconductor-nrf52810-xxaa/processors/ (Core=Cortex-M4 64 MHz, Floating Point Unit=NO_FPU, Flash 196.61 kbyte, RAM 24.58 kbyte)",
+      "_note": "!! 最容易踩的坑: 内核是 Cortex-M4 但**没有 FPU** (Keil 的 Floating Point Unit 行是 NO_FPU)。所以必须 -mfloat-abi=soft, 绝不能照抄 nRF52840 的 fpv4-sp-d16+hard —— 那会生成真机上一执行就 HardFault 的 FPU 指令。ocd 用 target/nrf52.cfg: 该脚本自称覆盖整个 nRF52 系列, flash 驱动是通用的 nrf5。"
+    },
+    "NRF52811": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/nrf52.cfg",
+      "_source": "https://www.keil.arm.com/devices/nordic-semiconductor-nrf52811-xxaa/processors/ (Core=Cortex-M4 64 MHz, Floating Point Unit=NO_FPU, Flash 196.61 kbyte, RAM 24.58 kbyte)",
+      "_note": "与 nRF52810 同为 Cortex-M4 无 FPU (NO_FPU), 且 flash/RAM 相同 (192 kB / 24 kB); 区别在射频协议支持 (802.15.4 / 测向), 与编译参数无关。ocd 同 nRF52 系列。"
+    },
+    "NRF5340": {
+      "cpu": "cortex-m33",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/nordic-semiconductor-nrf5340-xxaa/processors/ (core0/应用核: Cortex-M33 128 MHz, Floating Point Unit=SP_FPU, Flash 1.05 Mbyte, RAM0 262.14 kbyte + RAM1 258.05 kbyte; core1/网络核: Cortex-M33 64 MHz, Floating Point Unit=NO_FPU, Flash 262.14 kbyte, RAM 65.54 kbyte)",
+      "_note": "!! 双核器件, 本条目给的是**应用核 (core0)** 的参数: Cortex-M33 带单精度 FPU (fpv5-sp-d16 + hard)。**网络核 (core1) 是 Cortex-M33 无 FPU、64 MHz、256 kB flash / 64 kB RAM** —— 若工程编译的是网络核固件, 本条目会给出错误的 FPU 参数 (真机会 HardFault), 必须在表外显式覆盖。ocd 写 null: 本机 OpenOCD 0.12.0 无 nrf53.cfg (已列目录核对, 只有 nrf51.cfg/nrf52.cfg), nRF53 的 CTRL-AP/APPROTECT 处理与 nRF52 不同, 借 nrf52.cfg 是未经验证的猜测。"
+    },
+    "NRF9160": {
+      "cpu": "cortex-m33",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/nordic-semiconductor-nrf9160-xxaa/processors/ (Core=Cortex-M33 64 MHz, Floating Point Unit=SP_FPU, Flash 1.05 Mbyte, RAM 262.14 kbyte); 本机 pyOCD target_nRF91xx.py (FlashRegion 0x0 len 0x100000, RamRegion 0x20000000 len 0x40000)",
+      "_note": "Cortex-M33 带单精度 FPU (fpv5-sp-d16 + hard), 单核。ocd 写 null: 本机 OpenOCD 无 nrf91 的 target 脚本 (nRF9160 的 modem 固件更新流程 pyOCD 有专门实现, OpenOCD 没有)。"
+    }
+  },
+  "flashBase": "0x00000000",
+  "ramBase": "0x20000000",
+  "_memory_comment": [
+    "== 数字怎么来的 (全部写成精确字节数) ==",
+    "pyOCD 内置 target 给的是精确十六进制, 直接采用: nRF52840 flash 0x100000=1048576 / ram 0x40000=262144; nRF52832 flash 0x80000=524288 / ram 0x10000=65536; nRF52833 flash 0x80000=524288 / ram 0x20000=131072; nRF9160 flash 0x100000=1048576 / ram 0x40000=262144。",
+    "nRF52810 / nRF52811 / nRF5340 没有 pyOCD 内置 target, 用 Arm Keil 器件库 (由 Nordic nRF_DeviceFamilyPack 生成) 的数字。Keil 的写法是十进制: '196.61 kbyte' = 196608 B (= 192 KiB), '24.58 kbyte' = 24576 B (= 24 KiB), '524.29 kbyte' = 524288 B, '1.05 Mbyte' = 1048576 B, '262.14 kbyte' = 262144 B, '131.07 kbyte' = 131072 B。换算后与 Nordic 规格里的 192 kB / 24 kB / 512 kB / 64 kB / 1 MB / 256 kB / 128 kB 逐项吻合。",
+    "!! 本表 models 的键有两种写法: 带 '_XXAA' 的完整器件名 (Nordic CMSIS/MDK 的标准器件名, 如 nRF52840_xxAA) 与不带后缀的裸系列名。devices.py 的 memory_for() 是**精确查表** (键与型号都 upper() 后全等比较), 所以两种常见写法都登记, 数值完全相同; '_XXAA' 是 Nordic 包/裸片通用后缀, 不影响容量。",
+    "!! Keil 页面上的 'ExtFlash 134.22 Mbyte' / nRF5340 的 '134.22 Mbyte ExtFlash' 是 QSPI 外接 flash 的**上限能力**, 不是芯片自带容量, 本表不登记。",
+    "!! nRF5340 的内存: 本条目按**应用核**登记 flash 1048576 / ram 524288 (512 KiB = RAM0 256 KiB + RAM1 256 KiB, Nordic 规格的 1 MB + 512 kB)。注意 Keil 把 RAM1 记作 '258.05 kbyte' (= 258048 B, 252 KiB), 比 256 KiB 少 4 KiB —— 两处口径不一致时本表取 Nordic 规格的 512 KiB 整值 (偏大的方向只会让容量校验漏报, 不会误报链接脚本超限)。网络核的 256 kB flash / 64 kB RAM 属于另一个核, 不在这里登记。",
+    "memory 只用来校验链接脚本是否超出真机, 所以宁可用'有出处的偏大整值', 也不写没出处的精确到 KiB 的猜测值。"
+  ],
+  "memory": {
+    "NRF52840": {
+      "_note": "1 MiB flash / 256 KiB RAM。出处: pyOCD target_nRF52840_xxAA.py (0x100000 / 0x40000) 与 Keil 器件库 (1.05 Mbyte / 262.14 kbyte) 一致。",
+      "models": {
+        "NRF52840": {"flash": 1048576, "ram": 262144},
+        "NRF52840_XXAA": {"flash": 1048576, "ram": 262144}
+      }
+    },
+    "NRF52832": {
+      "_note": "512 KiB flash / 64 KiB RAM。出处: pyOCD target_nRF52832_xxAA.py (0x80000 / 0x10000) 与 Keil 器件库 (524.29 kbyte / 65.54 kbyte) 一致。",
+      "models": {
+        "NRF52832": {"flash": 524288, "ram": 65536},
+        "NRF52832_XXAA": {"flash": 524288, "ram": 65536}
+      }
+    },
+    "NRF52833": {
+      "_note": "512 KiB flash / 128 KiB RAM。出处: pyOCD target_nRF52833_xxAA.py (0x80000 / 0x20000) 与 Keil 器件库 (524.29 kbyte / 131.07 kbyte) 一致。pyOCD 里另有一个 0x00800000 起的 code_ram 区, 是同一块 RAM 的别名, 不重复计入。",
+      "models": {
+        "NRF52833": {"flash": 524288, "ram": 131072},
+        "NRF52833_XXAA": {"flash": 524288, "ram": 131072}
+      }
+    },
+    "NRF52810": {
+      "_note": "192 KiB flash / 24 KiB RAM。出处: Keil 器件库 nRF52810_xxAA (196.61 kbyte / 24.58 kbyte = 196608 / 24576 B)。本机 pyOCD 无该 target 定义, 故无第二处十六进制佐证。",
+      "models": {
+        "NRF52810": {"flash": 196608, "ram": 24576},
+        "NRF52810_XXAA": {"flash": 196608, "ram": 24576}
+      }
+    },
+    "NRF52811": {
+      "_note": "192 KiB flash / 24 KiB RAM。出处: Keil 器件库 nRF52811_xxAA (196.61 kbyte / 24.58 kbyte = 196608 / 24576 B)。本机 pyOCD 无该 target 定义。",
+      "models": {
+        "NRF52811": {"flash": 196608, "ram": 24576},
+        "NRF52811_XXAA": {"flash": 196608, "ram": 24576}
+      }
+    },
+    "NRF5340": {
+      "_note": "只登记**应用核**: 1 MiB flash / 512 KiB RAM (Keil: 1.05 Mbyte / RAM0 262.14 kbyte + RAM1 258.05 kbyte)。网络核 (256 KiB flash / 64 KiB RAM) 不在此登记, 见 families.NRF5340._note 与 _memory_comment。",
+      "models": {
+        "NRF5340": {"flash": 1048576, "ram": 524288},
+        "NRF5340_XXAA": {"flash": 1048576, "ram": 524288}
+      }
+    },
+    "NRF9160": {
+      "_note": "1 MiB flash / 256 KiB RAM。出处: pyOCD target_nRF91xx.py (0x100000 / 0x40000) 与 Keil 器件库 (1.05 Mbyte / 262.14 kbyte) 一致。pyOCD 里 0x00ff8000 的 UICR 区不是用户代码区, 不折算进 flash 容量。",
+      "models": {
+        "NRF9160": {"flash": 1048576, "ram": 262144},
+        "NRF9160_XXAA": {"flash": 1048576, "ram": 262144}
+      }
+    }
+  },
+  "_probe_comment": "openocd interface 配置; doctor/burn 的默认探测顺序。只列本机确实存在的 cfg: interface/jlink.cfg (Nordic DK 板载 J-Link OB) 与 interface/cmsis-dap.cfg (DAPLink / nRF Connect Programmer)。interface/stlink.cfg 本机也存在但故意不列入默认顺序: nrf52.cfg 自己写明 ST-Link 无法访问 CTRL-AP, nrf52_recover 用它解不开被 APPROTECT 锁住的芯片。",
+  "probes": [
+    {
+      "name": "jlink",
+      "cfg": "interface/jlink.cfg"
+    },
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    }
+  ]
+}

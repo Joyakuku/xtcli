@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "_comment": [
+    "xtcli STM32 设备数据表 —— 只放数据, 不放逻辑。新增芯片/系列只改这里。",
+    "families: 由型号前缀 (STM32F1 / STM32H7 ...) 匹配, 提供 CPU/FPU 与 openocd target。",
+    "cproject 里只写了 target_mcu, 没有 -mcpu/-mfpu, 所以这里必须补齐。",
+    "density: 由型号里的容量代码推导 HAL 密度宏 (CubeMX 的 STM32F103RCTx -> STM32F103xE)。",
+    "内核各异的子系列必须单独立键, 否则会被更短的键吃掉 —— STM32WBA (Cortex-M33) 与",
+    "STM32WB0 (Cortex-M0+) 都以前缀 STM32WB (Cortex-M4) 开头, 属于最容易踩的错配。",
+    "series.subseries: 该系列键**已知的子系列标识**。型号命中该键后, 若延伸段第一位是",
+    "子系列标识形状 (一位字母+数字, 或一位数字+字母) 且未列在这里, 就会产生歧义告警并",
+    "拒绝套用该键的 cpu/fpu —— 忘了给新子系列立键时会立刻暴露, 而不是静默错配。",
+    "依据: ST STM32WBA 系列为 Cortex-M33, STM32WB0 系列为 Cortex-M0+;",
+    "CMSIS 器件头 STMicroelectronics/cmsis-device-wba (Include/stm32wbaxx.h) 与",
+    "cmsis-device-wb0 (Include/stm32wb0x.h) 分别确认了家族宏 STM32WBAxx / STM32WB0x。"
+  ],
+  "families": {
+    "STM32C0": {
+      "cpu": "cortex-m0plus",
+      "fpu": "",
+      "ocd": "target/stm32c0x.cfg",
+      "_note": "ocd 取自 OpenOCD 上游 target 列表 (stm32c0x.cfg 是较新加入的); 本机装的 OpenOCD 版本里没有这个脚本 —— burn 前会预检并给出 -OcdTarget / pyOCD 的替代做法, 不会拿着不存在的 cfg 去烧"
+    },
+    "STM32F0": {
+      "cpu": "cortex-m0",
+      "fpu": "",
+      "ocd": "target/stm32f0x.cfg"
+    },
+    "STM32F1": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/stm32f1x.cfg"
+    },
+    "STM32F2": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/stm32f2x.cfg"
+    },
+    "STM32F3": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32f3x.cfg"
+    },
+    "STM32F4": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32f4x.cfg"
+    },
+    "STM32F7": {
+      "cpu": "cortex-m7",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32f7x.cfg"
+    },
+    "STM32G0": {
+      "cpu": "cortex-m0plus",
+      "fpu": "",
+      "ocd": "target/stm32g0x.cfg"
+    },
+    "STM32G4": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32g4x.cfg"
+    },
+    "STM32H5": {
+      "cpu": "cortex-m33",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32h5x.cfg",
+      "_note": "同 STM32C0: stm32h5x.cfg 来自 OpenOCD 上游, 本机装的版本里没有 —— burn 前会预检, 缺失时给 -OcdTarget / pyOCD 的替代做法"
+    },
+    "STM32H7": {
+      "cpu": "cortex-m7",
+      "fpu": "-mfpu=fpv5-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32h7x.cfg"
+    },
+    "STM32L0": {
+      "cpu": "cortex-m0plus",
+      "fpu": "",
+      "ocd": "target/stm32l0.cfg"
+    },
+    "STM32L1": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/stm32l1.cfg"
+    },
+    "STM32L4": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32l4x.cfg"
+    },
+    "STM32L5": {
+      "cpu": "cortex-m33",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32l5x.cfg"
+    },
+    "STM32U5": {
+      "cpu": "cortex-m33",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32u5x.cfg"
+    },
+    "STM32WB": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/stm32wbx.cfg",
+      "subseries": ["A", "0"]
+    },
+    "STM32WBA": {
+      "cpu": "cortex-m33",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "subseries": ["6"],
+      "_note": "内核 Cortex-M33 (带 FPU); 与 STM32WB 的 Cortex-M4 不同。ocd 暂缺: OpenOCD 没有 stm32wba.cfg, 用 stm32wbx.cfg 是未经验证的猜测, 所以留空走 pyOCD/显式 -OcdTarget"
+    },
+    "STM32WB0": {
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": ["5", "9"],
+      "_note": "内核 Cortex-M0+ (无 FPU); 与 STM32WB 的 Cortex-M4 不同。ocd 暂缺: OpenOCD 没有 stm32wb0 的 target 配置"
+    },
+    "STM32WL": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=soft",
+      "ocd": "target/stm32wlx.cfg",
+      "subseries": ["E"],
+      "_note": "subseries E = STM32WLE5: 单核 Cortex-M4、无 FPU, 与本体条目同内核 —— 依据 ST 数据手册与 RIOT lora-e5-dev(STM32WLE5JC) 板级资料。不登记会让 WLE5 被当成'内核不明的子系列'而拒绝"
+    }
+  },
+  "_density_comment": [
+    "容量码位置因系列而异, 这里按 F1 的约定: 型号第 4 段首字母 (STM32F103RCTx -> C)。",
+    "只作为 .cproject/.ewp 里没有现成宏时的兜底推导; 有现成宏时一律以现成宏为准。",
+    "保留键 hal: 该系列的 HAL 家族宏由 CMSIS 器件头自己定义 (WBA -> STM32WBA, WB0 -> STM32WB0),",
+    "所以这里**不额外加 -D**, density_define 只据此说明原因; 键值是该系列的家族宏后缀。",
+    "WBA/WB0 的依据: cmsis-device-wba (Include/stm32wbaxx.h) 与 cmsis-device-wb0 (Include/stm32wb0x.h)。"
+  ],
+  "density": {
+    "STM32WBA": {
+      "hal": "xx"
+    },
+    "STM32WB0": {
+      "hal": "xx"
+    },
+    "STM32F1": {
+      "4": "x6",
+      "6": "x6",
+      "8": "x8",
+      "B": "xB",
+      "C": "xE",
+      "D": "xE",
+      "E": "xE",
+      "F": "xF",
+      "G": "xG"
+    }
+  },
+  "flashBase": "0x08000000",
+  "_devicePattern_comment": [
+    "从型号里切出 <系列段><引脚码><容量码> 的正则, 第 3 个捕获组必须是容量码。",
+    "memory 按容量码查表时**只认表里显式声明的这个形状** —— 没有它就跳过校验, 绝不猜:",
+    "形状用错会取到引脚码/型号位, 那就是拿错误的容量去校验链接脚本。",
+    "注意 [A-Z]{2,6}\\d{2,4} 这一段: STM32 是 'STM'+'32', GD32 是 'GD'+'32',",
+    "所以同一形状能覆盖 ST 系命名的全部厂商; 命名不同的厂商请改用 memory.<系列>.models。"
+  ],
+  "devicePattern": "^([A-Z]{2,6}\\d{2,4}[A-Z]+\\d+)([A-Z])([A-Z0-9])",
+  "_memory_comment": [
+    "按型号里的**容量码**给出芯片真实容量, 用来校验链接脚本 (.ld/.icf) 是否超出真机 ——",
+    "超出的方向最危险: 链接能过, 但代码越界 / 栈顶落在不存在的 RAM 上, 真机跑不起来。",
+    "来源: ST CMSIS 的 IAR linker 模板 (Templates/iar/linker/stm32f103x{6,b,e,g}_flash.icf,",
+    "实测 x6=32K/10K、xB=128K/20K、xE=512K/64K、xG=1024K/96K) 给出各组的**上限**;",
+    "C=256K/48K 由 CubeMX 为 STM32F103RCTx 生成的 .ld 佐证; 4/D/F 由 ST 容量码定义推导。",
+    "没有数据的系列/容量码一律**跳过校验** (宁可不查, 不误报)。"
+  ],
+  "memory": {
+    "STM32F1": {
+      "4": {"flash": 16384, "ram": 6144},
+      "6": {"flash": 32768, "ram": 10240},
+      "8": {"flash": 65536, "ram": 20480},
+      "B": {"flash": 131072, "ram": 20480},
+      "C": {"flash": 262144, "ram": 49152},
+      "D": {"flash": 393216, "ram": 65536},
+      "E": {"flash": 524288, "ram": 65536},
+      "F": {"flash": 786432, "ram": 98304},
+      "G": {"flash": 1048576, "ram": 98304}
+    }
+  },
+  "_probe_comment": "openocd interface 配置; doctor/burn 的默认探测顺序。",
+  "probes": [
+    {
+      "name": "stlink",
+      "cfg": "interface/stlink.cfg"
+    },
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    },
+    {
+      "name": "jlink",
+      "cfg": "interface/jlink.cfg"
+    }
+  ]
+}

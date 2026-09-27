@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "vendor": "Microchip",
+  "_comment": [
+    "xtcli 的 Microchip (原 Atmel) SAM 设备数据表 (暂存稿) —— 只放数据, 不放逻辑。",
+    "用途: 给 SAMD21/SAMD51/SAML21/SAML22/SAME51/SAME54/SAMC21 工程补 -mcpu/-mfpu, 给出 openocd target 与烧录基址。",
+    "来源规则: 每个 cpu/fpu 的依据写在 families.<系列>._source; 每个容量数字的依据写在 _memory_comment 与 memory.<系列>._note; 查不到的键一律不写, 绝不猜。",
+    "内核/FPU 来源: Arm Keil 器件数据库的逐型号页面 https://www.keil.arm.com/devices/microchip-atsam<型号小写>/processors/ (由 Microchip 官方 DFP pack 生成), 每页给出 Core 与 Floating Point Unit 两行 (SP_FPU / NO_FPU)。7 个系列逐个核对过型号: SAMD21J18A/J17A, SAMD51J20A/J19A, SAML21J18A, SAML22J18A, SAME51J20A/J19A, SAME54P20A/P19A, SAMC21J18A —— Core 与 FPU 在同一个系列的所有核对型号上完全一致, 所以可以安全地按系列立键。",
+    "交叉核对: MicroPython 的 SAMD 端口文档 (https://docs.micropython.org/en/latest/samd/general.html) 独立印证了 SAMD21 = ARM Cortex M0+ (48 MHz, 最多 256 kB flash / 32 kB RAM) 与 SAMD51 = ARM Cortex M4 (120 MHz, 最多 1 MB flash / 256 kB RAM) —— 与 Keil 逐型号数字完全吻合; 但该文档只覆盖 D21/D51 两个系列, SAML/SAMC/SAME 只能靠 Keil 器件库。",
+    "ocd: 全部 7 个系列都能用本机**真实存在**的脚本, 且脚本文件头自己声明覆盖该器件 (已逐行核对本机 E:\\env\\msys64\\mingw64\\share\\openocd\\scripts\\target):",
+    "  * target/at91samdXX.cfg 第 4 行: 'script for Atmel SAMD, SAMR, SAML or SAMC, a Cortex-M0 chip' -> SAMD21 / SAML21 / SAML22 / SAMC21 (都是 Cortex-M0+, 与脚本建的通用 cortex_m target 相容; 文件里的 SAML 指 SAML21/SAML22, 不是另有 atsaml1x.cfg 的 SAML10/11);",
+    "  * target/atsame5x.cfg 第 4-5 行: 'Microchip (former Atmel) SAM E54, E53, E51 and D51 devices with a Cortex-M4 core', 第 64 行也写 'SAM E5x/D51 runs at SYSCLK = 48 MHz...' -> SAMD51 / SAME51 / SAME54。这一条是**脚本自己点名 D51**, 不是我拿别的系列顶替。",
+    "  注意 atsaml1x.cfg 是 SAML10/SAML11 (L1x 系列, Cortex-M23, expected-id 0x0bf11477) 的脚本, 与 SAML21/SAML22 不是一回事, 所以 SAML21/SAML22 用 at91samdXX.cfg 而不是它。",
+    "probes: 只登记本机 scripts\\interface 里确实存在的 cfg。Microchip Xplained 板上的 EDBG 与 Atmel-ICE 都是 CMSIS-DAP 类探针, 故 cmsis-dap 排第一; J-Link 官方支持 SAMD/SAME 系列, 且本机 jlink.cfg 存在, 排第二。",
+    "flashBase 0x00000000: SAM 器件把用户 flash 映射在地址 0。依据: 本机 target/at91samdXX.cfg 的 'flash bank $_FLASHNAME at91samd 0x00000000 0 1 1 $_TARGETNAME' 与 target/atsame5x.cfg 的 'flash bank $_FLASHNAME atsame5 0x00000000 0 1 1 $_TARGETNAME' (两个脚本覆盖本表全部 7 个系列)。系列间无需覆盖, 故只用表级默认值。",
+    "ramBase 0x20000000: 依据同样来自本机脚本 —— at91samdXX.cfg 与 atsame5x.cfg 都把 flash 算法的 work area 放在 '-work-area-phys 0x20000000'。",
+    "!! 已知的命名缺口 (不是 bug, 是表键形状决定的, 这里如实记下): families 键按需求规定为 SAMD21 这类**不带 ATSAM 前缀**的写法。devices.py 的 family_by_prefix() 是 startswith 匹配, 所以 'ATSAMD21J18A' 这种带 ATSAM 前缀的完整订货型号**不会**命中 SAMD21 (字符串以 'ATSAM' 开头), 从而拿不到 cpu/fpu, gcc 后端会确定性地拒绝编译 (而不是编错固件) —— 这是安全的失败方向。若要让这种写法也能用, 需要另加 'ATSAMD21' 一类的键, 但那就超出本表被规定的键集合了, 故只记录不擅改。",
+    "故意没写的键: (1) SAML21/SAML22/SAME51/SAME54/SAMC21 的 memory 整段不写 —— 见 _memory_comment 的理由。(2) SAMD21/SAMD51 里没有逐个核对过容量码的型号 (x16 = 64 kB 档等) 不登记, 缺键即跳过校验。(3) devicePattern: SAM 型号里的数字是引脚数+容量码混排 (SAMD21J18A 的 21 是系列号), 用默认正则切'容量码'会切错位, 整键不写。(4) density / arch / abi: 未查证 xtcli 的取值约定, 不写。(5) 明确不收 NXP/i.MX RT 任何条目。"
+  ],
+  "families": {
+    "SAMD21": {
+      "aliases": [
+        "ATSAMD21"
+      ],
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/at91samdXX.cfg",
+      "_source": "https://www.keil.arm.com/devices/microchip-atsamd21j18a/processors/ (Core=Cortex-M0+, 48 MHz, Floating Point Unit=NO_FPU; 同结论见 j17a/g18a/e18a/g17a/e17a 各页); https://docs.micropython.org/en/latest/samd/general.html",
+      "_note": "Cortex-M0+ (ARMv6-M) 无 FPU, 必须 -mfloat-abi=soft。ocd: 本机 target/at91samdXX.cfg 文件头声明覆盖 SAMD/SAMR/SAML/SAMC。"
+    },
+    "SAMD51": {
+      "aliases": [
+        "ATSAMD51"
+      ],
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/atsame5x.cfg",
+      "_source": "https://www.keil.arm.com/devices/microchip-atsamd51j20a/processors/ (Core=Cortex-M4, 120 MHz, Floating Point Unit=SP_FPU; 同结论见 j19a/p20a/n20a/p19a/n19a 各页)",
+      "_note": "Cortex-M4F: 有单精度 FPU (FPv4-SP) -> fpv4-sp-d16 + hard。ocd: 本机 target/atsame5x.cfg 文件头逐字写了 'SAM E54, E53, E51 and D51 devices with a Cortex-M4 core', 是脚本自己声明覆盖 D51, 不是借用。"
+    },
+    "SAML21": {
+      "aliases": [
+        "ATSAML21"
+      ],
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/at91samdXX.cfg",
+      "_source": "https://www.keil.arm.com/devices/microchip-atsaml21j18a/processors/ (Core=Cortex-M0+, 48 MHz, Floating Point Unit=NO_FPU)",
+      "_note": "Cortex-M0+ 无 FPU。ocd 用 at91samdXX.cfg (文件头声明覆盖 SAML), 不是 atsaml1x.cfg —— 后者是 SAML10/SAML11 (Cortex-M23) 的脚本。memory 不写, 见 _memory_comment。"
+    },
+    "SAML22": {
+      "aliases": [
+        "ATSAML22"
+      ],
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/at91samdXX.cfg",
+      "_source": "https://www.keil.arm.com/devices/microchip-atsaml22j18a/processors/ (Core=Cortex-M0+, FPU=NO_FPU; Keil 页面的 Max Clock 显示 32 MHz)",
+      "_note": "Cortex-M0+ 无 FPU。SAML22 相对 SAML21 多了段式 LCD 控制器, 编译参数与 SAML21 相同。ocd 同上。memory 不写, 见 _memory_comment。"
+    },
+    "SAME51": {
+      "aliases": [
+        "ATSAME51"
+      ],
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/atsame5x.cfg",
+      "_source": "https://www.keil.arm.com/devices/microchip-atsame51j20a/processors/ (Core=Cortex-M4, 120 MHz, Floating Point Unit=SP_FPU; 同结论见 j19a 页)",
+      "_note": "Cortex-M4F (fpv4-sp-d16 + hard)。ocd 有直接依据: atsame5x.cfg 文件头写 E54/E53/E51/D51。memory 不写: Keil 页面的 Memory 行全是 '0 byte' (Microchip DFP 未发布容量), 见 _memory_comment。"
+    },
+    "SAME54": {
+      "aliases": [
+        "ATSAME54"
+      ],
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": "target/atsame5x.cfg",
+      "_source": "https://www.keil.arm.com/devices/microchip-atsame54p20a/processors/ (Core=Cortex-M4, 120 MHz, Floating Point Unit=SP_FPU; 同结论见 p19a 页)",
+      "_note": "Cortex-M4F (fpv4-sp-d16 + hard)。ocd 同上 (E54 被脚本点名)。memory 不写, 见 _memory_comment。"
+    },
+    "SAMC21": {
+      "aliases": [
+        "ATSAMC21"
+      ],
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/at91samdXX.cfg",
+      "_source": "https://www.keil.arm.com/devices/microchip-atsamc21j18a/processors/ (Core=Cortex-M0+, Floating Point Unit=NO_FPU)",
+      "_note": "Cortex-M0+ 无 FPU (5V 工业系列, 无 FPU)。ocd: at91samdXX.cfg 文件头声明覆盖 SAMC。memory 不写, 见 _memory_comment。"
+    }
+  },
+  "flashBase": "0x00000000",
+  "ramBase": "0x20000000",
+  "_memory_comment": [
+    "== 数字怎么来的 ==",
+    "全部来自 Arm Keil 器件库的逐型号 Memory 表 (由 Microchip 官方 DFP pack 生成)。Keil 用十进制写法, 换算成精确字节数: '262.14 kbyte' = 262144 B (256 KiB), '32.77 kbyte' = 32768 B (32 KiB), '131.07 kbyte' = 131072 B (128 KiB), '16.38 kbyte' = 16384 B (16 KiB), '1.05 Mbyte' = 1048576 B (1 MiB), '196.61 kbyte' = 196608 B (192 KiB), '524.29 kbyte' = 524288 B (512 KiB), '8.19 kbyte' = 8192 B (8 KiB)。",
+    "SAMD21: J18A / G18A / E18A = 256 KiB flash + 32 KiB SRAM (FLASH 262.14 kbyte, HMCRAMC0 32.77 kbyte); J17A / G17A / E17A = 128 KiB flash + 16 KiB SRAM。MicroPython 的 SAMD 文档独立印证 'SAMD21: Internal FlashROM up to 256 kB, Total RAM available up to 32 kB'。",
+    "SAMD51: J20A / P20A / N20A = 1 MiB flash + 256 KiB SRAM (FLASH 1.05 Mbyte, HSRAM 262.14 kbyte); J19A / P19A / N19A = 512 KiB flash + 192 KiB SRAM (FLASH 524.29 kbyte, HSRAM 196.61 kbyte)。MicroPython 的 SAMD 文档独立印证 'SAMD51: up to 256 kB RAM, Internal FlashROM up to 1 MB'。",
+    "!! SAMD51 的 HSRAM_ETB (32.77 kbyte) 与 HSRAM_RET1 (32.77 kbyte) **不是额外的 RAM**: 它们是同一块 HSRAM 里划出来做 Embedded Trace Buffer / 备份保持的子区间, 已包含在 HSRAM 的总额里, 所以本表只写 HSRAM 的值, 不叠加 (叠加会把 256 KiB 写成 320 KiB, 让容量校验完全失效)。BKUPRAM (8.19 kbyte = 8 KiB) 是独立的 32-bit 备份寄存器区, 不属于主 SRAM, 也不计入 ram —— 它不能当普通内存放栈/堆。",
+    "!! 为什么 SAML21 / SAML22 / SAME51 / SAME54 / SAMC21 **一条 memory 都不写**: Arm Keil 器件库里这 5 个系列的 Memory 表每一行都是 '0 byte' (FLASH 0 byte / HSRAM 0 byte / RWW 0 byte / LPRAM 0 byte), 也就是 Microchip 的 DFP 没有发布容量数字; 交叉核对的路也被堵住: 本机 pyOCD 0.45.1 内置 target 里没有任何 Microchip SAM 器件 (只有 nRF 系列), microchip.com 与 digikey 托管的 PDF 数据手册对本机自动抓取分别返回 403 / 406, 无法读到 'Configuration Summary' 表。没有出处就不写数字 —— 这是本表接受的退路 (缺键即跳过链接脚本容量校验), 远好过按'估计值'去校验。",
+    "!! memory 是**精确查表**: devices.py 的 memory_for() 用 '键与型号 upper() 后全等' 比较, 且一旦该系列写了 models 就以 models 为准 (表里没有的型号返回 None, 不再按容量码猜)。所以这里登记的键是完整订货型号去掉封装/温度后缀的写法 (SAMD21J18A), 不登记 'SAMD21J18A-AU' 这类带封装后缀的写法; 也没有按容量码 (x16/x17/x18/x19/x20) 建表, 因为那需要 devicePattern 且 SAM 型号里的数字位混排, 容易切错位。"
+  ],
+  "memory": {
+    "SAMD21": {
+      "_note": "只登记已逐个核对过 Keil 页面的容量档: x18 = 256 KiB/32 KiB, x17 = 128 KiB/16 KiB。x16 (64 KiB/8 KiB) 档及更多封装变体未逐个核对, 故意不写。",
+      "models": {
+        "SAMD21J18A": {
+          "flash": 262144,
+          "ram": 32768
+        },
+        "SAMD21G18A": {
+          "flash": 262144,
+          "ram": 32768
+        },
+        "SAMD21E18A": {
+          "flash": 262144,
+          "ram": 32768
+        },
+        "SAMD21J17A": {
+          "flash": 131072,
+          "ram": 16384
+        },
+        "SAMD21G17A": {
+          "flash": 131072,
+          "ram": 16384
+        },
+        "SAMD21E17A": {
+          "flash": 131072,
+          "ram": 16384
+        }
+      }
+    },
+    "SAMD51": {
+      "_note": "只登记已逐个核对过 Keil 页面的容量档: x20 = 1 MiB/256 KiB, x19 = 512 KiB/192 KiB。ram 只取 HSRAM, 不含 ETB/RET1 子区间与 BKUPRAM。",
+      "models": {
+        "SAMD51J20A": {
+          "flash": 1048576,
+          "ram": 262144
+        },
+        "SAMD51P20A": {
+          "flash": 1048576,
+          "ram": 262144
+        },
+        "SAMD51N20A": {
+          "flash": 1048576,
+          "ram": 262144
+        },
+        "SAMD51J19A": {
+          "flash": 524288,
+          "ram": 196608
+        },
+        "SAMD51P19A": {
+          "flash": 524288,
+          "ram": 196608
+        },
+        "SAMD51N19A": {
+          "flash": 524288,
+          "ram": 196608
+        }
+      }
+    }
+  },
+  "_probe_comment": "openocd interface 配置; doctor/burn 的默认探测顺序。只列本机确实存在的 cfg: interface/cmsis-dap.cfg (Xplained 板载 EDBG / Atmel-ICE 都是 CMSIS-DAP 类) 与 interface/jlink.cfg (J-Link 官方支持 SAMD/SAME, 本机存在)。",
+  "probes": [
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    },
+    {
+      "name": "jlink",
+      "cfg": "interface/jlink.cfg"
+    }
+  ]
+}

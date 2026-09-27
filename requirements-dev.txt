@@ -1,0 +1,6 @@
+# 仅开发/测试用。运行时零第三方依赖 (见 pyproject.toml)。
+# 测试用 unittest.TestCase 写成, 所以即使不装这些也能跑:
+#     python -m unittest discover -s tests
+pytest>=8.0
+ruff>=0.6
+mypy>=1.10

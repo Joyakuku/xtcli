@@ -1,0 +1,28 @@
+# ---- 运行环境（由 setup.ps1 创建 / 运行期生成，绝不入库）----
+.venv/
+.venv-pyocd/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# ---- 命令 shim（setup.ps1 生成，含本机路径）----
+/bin/
+/bin-msys/
+
+# ---- 本机运行期状态（工具版本缓存、探针缓存、venv 元信息）----
+/xtcli.json
+
+# ---- 本地备份与暂存（迁移/拆分时的中间产物）----
+_backup-*/
+_staging/
+
+# ---- 受管写入留下的备份（出现在被管理的工程里）----
+*.xtcli-bak
+
+# ---- 编辑器/系统 ----
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "vendor": "WCH (Nanjing Qinheng Microelectronics)",
+  "_comment": [
+    "xtcli WCH CH32V 设备数据表 —— 只放数据, 不放逻辑。",
+    "CH32V 是 **RISC-V** 内核 (沁恒自研 QingKe), 不是 ARM: 因此这里给的是",
+    "arch/abi/toolchain 而不是 -mcpu/-mfpu。xtcli 会据此切到 RISC-V 工具链",
+    "(riscv-none-elf-), 并按 arch/abi 生成 -march/-mabi。",
+    "为什么 cpu 为空: RISC-V 没有 -mcpu 这个概念; 用 arch/abi 表达目标。",
+    "工具链: xPack riscv-none-elf-gcc (E:\\env\\RiscV\\riscv-none-elf), 已实测可编译",
+    "rv32ec/ilp32e 与 rv32imac/ilp32 两个档位。",
+    "只登记**已核对过**的系列: 目前只有 CH32V003。CH32V103/203/307 等系列",
+    "(RV32IMAC/RV32IMAFC) 尚未逐项核对 datasheet, 按\"查不到就不写\"留空 ——",
+    "缺条目只会得到\"CPU/FPU 无法确定\"的确定性拒绝, 不会拿错参数去编译。"
+  ],
+  "families": {
+    "CH32V003": {
+      "cpu": "",
+      "arch": "rv32ec",
+      "abi": "ilp32e",
+      "toolchain": "riscv-none-elf-",
+      "fpu": "",
+      "ocd": null,
+      "_source": "https://www.wch-ic.com/products/CH32V003.html ; https://www.cnx-software.com/2022/10/22/10-cents-ch32v003-risc-v-mcu-offers-2kb-sram-16kb-flash-in-sop8-to-qfn20-packages/ ; https://www.wch-ic.com/downloads/CH32V003DS0.PDF.html?type=en",
+      "_note": "内核: QingKe V2A (RISC-V RV32E + C 扩展, 2 级流水), 故 arch=rv32ec / abi=ilp32e。ocd 为 null: 本机 OpenOCD 0.12.0 的 scripts/target 下没有任何 ch32/wch target 配置 (WCH-LinkE 也需要 OpenOCD 侧的 wch-link 支持), 所以烧录需要 -OcdTarget 指定或用厂商工具 (WCH-LinkUtility/MounRiver) —— 不拿别的厂商 cfg 顶替, 那会烧错芯片。"
+    }
+  },
+  "flashBase": "0x08000000",
+  "ramBase": "0x20000000",
+  "_memory_comment": [
+    "CH32V003 全系只有一种存储配置: 16KB Flash + 2KB SRAM (数据手册\"规格信息\"章)。",
+    "型号命名 (CH32V003F4P6) 里没有容量码, 所以用 models 精确表而不是 devicePattern。",
+    "出处: WCH 官方产品页与 CH32V003DS0 数据手册; 交叉佐证见 CNX Software 的报道。"
+  ],
+  "memory": {
+    "CH32V003": {
+      "models": {
+        "CH32V003F4P6": {"flash": 16384, "ram": 2048},
+        "CH32V003F4U6": {"flash": 16384, "ram": 2048},
+        "CH32V003A4M6": {"flash": 16384, "ram": 2048},
+        "CH32V003J4M6": {"flash": 16384, "ram": 2048}
+      },
+      "_sources": {
+        "spec": "https://www.wch-ic.com/downloads/CH32V003DS0.PDF.html?type=en",
+        "product": "https://www.wch-ic.com/products/CH32V003.html"
+      }
+    }
+  },
+  "_probe_comment": [
+    "只列本机 OpenOCD scripts/interface 里**确实存在**的配置。",
+    "注意: CH32V 官方调试器 WCH-LinkE 在本机 OpenOCD 里没有对应 interface/target,",
+    "所以这份清单对 CH32V 实际帮助有限 —— 保留通用项是为了配合 -OcdTarget 或将来升级 OpenOCD。"
+  ],
+  "probes": [
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    },
+    {
+      "name": "jlink",
+      "cfg": "interface/jlink.cfg"
+    }
+  ]
+}

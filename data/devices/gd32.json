@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "vendor": "GigaDevice",
+  "_comment": [
+    "xtcli 的 GigaDevice GD32 设备数据表 (暂存稿) —— 只放数据, 不放逻辑。",
+    "数据来源规则: 每个 cpu/fpu 的依据写在 families.<系列>._source; 每条 memory 数值的依据写在 memory.<系列>._sources; 查不到就不写那个键 (工具对缺键的系列会跳过校验/拒绝编译), 绝不猜。",
+    "内核与 FPU 来源: Arm Keil 器件数据库 /devices/gigadevice-<型号>/processors/ 的 'Core' 与 'Floating Point Unit' 行。该库由 Arm 从 GigaDevice 官方 CMSIS DFP pack (GigaDevice.GD32F10x_DFP / GD32F30x_DFP / GD32F4xx_DFP / GD32F1x0_DFP / GD32F3x0_DFP / GD32E10x_DFP / GD32E23x_DFP) 生成, 逐型号给出。",
+    "上述来源的例外: GD32F330/GD32F350 在 Keil 里 'Floating Point Unit' 行是空的 (既不是 NO_FPU 也不是 SP_FPU), 因此改用 GigaDevice 官方固件库头文件 GD32F3x0 V2.2.0 的 __FPU_PRESENT 1U 作为依据 (URL 见这两个系列的 _source)。",
+    "ocd: 本机 OpenOCD (E:\\env\\msys64\\mingw64\\share\\openocd\\scripts) 的 target 目录里只有 gd32e23x.cfg 与 gd32vf103.cfg 两个 GD32 target 脚本 (已用 pwsh 列目录核对)。其余系列一律写 null —— 借用 stm32f1x.cfg 之类'看起来像'的脚本属于未经验证的猜测, 宁可留空, 由 pyOCD 或显式 -OcdTarget 兜底。",
+    "probes: 只登记本机 scripts\\interface 里确实存在的 cfg (stlink.cfg / cmsis-dap.cfg / jlink.cfg 均已列目录确认)。",
+    "flashBase: 0x08000000。依据: 本机 OpenOCD gd32e23x.cfg 与 gd32vf103.cfg 都把 flash bank 建在 0x08000000; GigaDevice 官方固件库头文件 gd32f3x0.h 定义 FLASH_BASE 0x08000000; GD32VF103 官方固件库自带链接脚本里 flash ORIGIN = 0x08000000。没有发现需要按系列覆盖 flashBase 的 GD32 系列, 故只用表级默认值。",
+    "devicePattern 与需求给的样例 ^([A-Z]{2,5}\\d+[A-Z]?)([A-Z])([A-Z0-9]) **不同**, 因为那个正则对 GD32 型号取到的第 3 组不是容量码。实测 (Python re.match): 'GD32F103RCT6' -> ('GD32','F','1'), 'GD32F450ZIT6' -> ('GD32','F','4'), 'GD32E230K6U6' -> ('GD32','E','2'), 容量码被取成了系列号的第 3 位, 于是 memory 永远查不到、容量校验静默失效。改用 ^(GD32[A-Z]+\\d+)([A-Z])([A-Z0-9]) 后实测: 'GD32F103RCT6' -> 'GD32F103'+'R'+'C', 'GD32F450ZIT6' -> 'I', 'GD32E230K6U6' -> 'K'+'6', 'GD32VF103C8T6' -> 'C'+'8', 第 3 组正是容量码。若坚持用样例正则, 请把 memory 整段删掉, 否则它是死数据。",
+    "故意没写的东西: (1) 未收录的 GD32 系列 (GD32F101/F105/F107, F2xx, F310, F403/F425/F427/F470, G5xx, F5xx, H7xx, L23x, E5xx, W51x, VW55x, A5xx, E235, E113 等) —— 没有逐型号核对过内核, 一条都不写, 工具对无键系列会拒绝编译。(2) density (HAL 密度宏): 没查证 GD32 的 HAL 宏约定, 整个键不写。(3) arch/abi/toolchain: 未查证取值约定, 不写。(4) 反向: 表里每个系列键都以数字结尾, 因此 devices.py 的 subseries 守卫 (只对'以字母结尾的系列键'生效) 不会介入; 也不会因为缺 subseries 声明而拒绝 GD32 型号。",
+    "GD32VF103 是 RISC-V 内核 (Nuclei 处理器核, 非 ARM), 见该系列 _note。"
+  ],
+  "families": {
+    "GD32E103": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32e103cb/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M4 (120 MHz), Floating Point Unit=SP_FPU。ocd 留空: 本机 OpenOCD 无 gd32e10x target 脚本。"
+    },
+    "GD32E230": {
+      "cpu": "cortex-m23",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/gd32e23x.cfg",
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32e230c8/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M23, Floating Point Unit=NO_FPU (ARMv8-M baseline 无 FPU)。ocd: 本机存在 target/gd32e23x.cfg, 文件头自称 'script for GigaDevice gd32e23x Cortex-M23 Series', 覆盖整个 E23x 系列, 故与 E231 共用。"
+    },
+    "GD32E231": {
+      "cpu": "cortex-m23",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/gd32e23x.cfg",
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32e231c8/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M23, Floating Point Unit=NO_FPU。与 GD32E230 同内核同外设家族, 共用本机 OpenOCD target/gd32e23x.cfg。"
+    },
+    "GD32F103": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32f103c4/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M3 (108 MHz), Floating Point Unit=NO_FPU (Cortex-M3 无 FPU)。ocd 留空: 本机 OpenOCD 无 gd32f10x/gd32f1x target 脚本。"
+    },
+    "GD32F130": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32f130c8/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M3 (72 MHz), Floating Point Unit=NO_FPU。与 GD32F103 是不同子系列 (F1x0 系列), 内核同为 M3 但容量码集合只有 4/6/8。ocd 留空: 本机 OpenOCD 无 gd32f1x0 target 脚本。"
+    },
+    "GD32F150": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32f150c8/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M3 (72 MHz), Floating Point Unit=NO_FPU。ocd 留空: 本机 OpenOCD 无 gd32f1x0 target 脚本。"
+    },
+    "GD32F303": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32f303cb/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M4 (120 MHz), Floating Point Unit=SP_FPU。ocd 留空: 本机 OpenOCD 无 gd32f30x target 脚本。"
+    },
+    "GD32F330": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://raw.githubusercontent.com/CommunityGD32Cores/gigadevice-firmware-and-docs/main/GD32F3x0/GD32F3x0_Firmware_Library_V2.2.0/Firmware/CMSIS/GD/GD32F3x0/Include/gd32f3x0.h",
+      "_note": "Core 取 Keil: Cortex-M4, 84 MHz。FPU: Keil 该行是空的 (既非 NO_FPU 也非 SP_FPU), 因此依据换成 GigaDevice 官方 GD32F3x0 固件库 V2.2.0 头文件 gd32f3x0.h 的 '#define __CM4_REV 0x0001' + '#define __FPU_PRESENT 1U /*!< FPU present */' —— 有 FPU, 单精度, 故 -mfpu=fpv4-sp-d16 -mfloat-abi=hard (上电后仍需按官方 system_gd32f3x0.c 打开 CPACR 的 FPU 位)。ocd 留空: 本机 OpenOCD 无 gd32f3x0 target 脚本。"
+    },
+    "GD32F350": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://raw.githubusercontent.com/CommunityGD32Cores/gigadevice-firmware-and-docs/main/GD32F3x0/GD32F3x0_Firmware_Library_V2.2.0/Firmware/CMSIS/GD/GD32F3x0/Include/gd32f3x0.h",
+      "_note": "Core 取 Keil: Cortex-M4, 108 MHz。FPU 依据同上 (官方 GD32F3x0 固件库头文件 __FPU_PRESENT 1U, 与 F330 同库同宏)。ocd 留空: 本机 OpenOCD 无 gd32f3x0 target 脚本。"
+    },
+    "GD32F405": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32f405re/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M4 (200 MHz), Floating Point Unit=SP_FPU。ocd 留空: 本机 OpenOCD 无 gd32f4xx target 脚本。"
+    },
+    "GD32F407": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32f407ie/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M4 (200 MHz), Floating Point Unit=SP_FPU。ocd 留空: 本机 OpenOCD 无 gd32f4xx target 脚本。"
+    },
+    "GD32F450": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.keil.arm.com/devices/gigadevice-gd32f450ve/processors/",
+      "_note": "Keil 器件库: Core=Cortex-M4 (200 MHz), Floating Point Unit=SP_FPU。ocd 留空: 本机 OpenOCD 无 gd32f4xx target 脚本。"
+    },
+    "GD32VF103": {
+      "cpu": "",
+      "fpu": "",
+      "ocd": "target/gd32vf103.cfg",
+      "_source": "https://doc.nucleisys.com/nuclei_sdk/design/soc/gd32vf103.html",
+      "_note": "RISC-V 内核, **不是 ARM**: Nuclei 文档称 GD32VF103 基于 'Nuclei RISC-V Process Core', 用 N205 核 (CORE 固定为 n205), 108 MHz; GigaDevice 产品页也把 GD32VF103 的 Core 列为 RISC-V。本工具当前只支持 ARM 工具链, 需要外部 RISC-V 工具链支持: 这里刻意不写 ARM 的 -mcpu/-mfpu 组合, 只标记 cpu='riscv'/fpu=''。注意本工具的事前拒绝条件是 cpu 与 arch 同时为空, 所以 'riscv' 不会被事前拦下, 而是会让构建停在编译阶段 (arm-none-eabi-gcc 不认 -mcpu=riscv, 响亮报错), 不会静默编出 ARM 固件; 若要在事前就拒绝, 需要工具侧支持 arch/toolchain 字段 (本表不猜这两个字段的取值)。ocd: 本机存在 OpenOCD target/gd32vf103.cfg (riscv target, transport jtag)。 现由设备表给出 arch/abi/toolchain (rv32imac/ilp32/riscv-none-elf-), 故本工具会直接用 RISC-V 工具链构建, 不再因'内核不是 ARM'而拒绝。",
+      "arch": "rv32imac",
+      "abi": "ilp32",
+      "toolchain": "riscv-none-elf-",
+      "_arch_comment": "RISC-V 目标用 arch/abi 表达 (没有 -mcpu): Nuclei N205 是 RV32IMAC, 故 -march=rv32imac -mabi=ilp32。工具链前缀 riscv-none-elf- (E:\\env\\RiscV), xtcli 会按该前缀重新查找工具链; 找不到就报环境缺失(3), 不会退回 ARM 工具链。已实测: 用该工具链编 rv32imac/ilp32 的固件通过。"
+    }
+  },
+  "flashBase": "0x08000000",
+  "devicePattern": "^(GD32[A-Z]+\\d+)([A-Z])([A-Z0-9])",
+  "memory": {
+    "GD32F103": {
+      "4": {
+        "flash": 16384,
+        "ram": 6144
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 10240
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 20480
+      },
+      "B": {
+        "flash": 131072,
+        "ram": 20480
+      },
+      "C": {
+        "flash": 262144,
+        "ram": 49152
+      },
+      "D": {
+        "flash": 393216,
+        "ram": 65536
+      },
+      "E": {
+        "flash": 524288,
+        "ram": 65536
+      },
+      "F": {
+        "flash": 786432,
+        "ram": 98304
+      },
+      "G": {
+        "flash": 1048576,
+        "ram": 98304
+      },
+      "I": {
+        "flash": 2097152,
+        "ram": 98304
+      },
+      "K": {
+        "flash": 3145728,
+        "ram": 98304
+      },
+      "_sources": {
+        "4": "https://www.keil.arm.com/devices/gigadevice-gd32f103c4/features/",
+        "6": "https://www.keil.arm.com/devices/gigadevice-gd32f103c6/features/",
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32f103c8/features/",
+        "B": "https://www.keil.arm.com/devices/gigadevice-gd32f103cb/features/",
+        "C": "https://www.keil.arm.com/devices/gigadevice-gd32f103rc/features/",
+        "D": "https://www.keil.arm.com/devices/gigadevice-gd32f103rd/features/",
+        "E": "https://www.keil.arm.com/devices/gigadevice-gd32f103re/features/",
+        "F": "https://www.keil.arm.com/devices/gigadevice-gd32f103rf/features/",
+        "G": "https://www.keil.arm.com/devices/gigadevice-gd32f103rg/features/",
+        "I": "https://www.keil.arm.com/devices/gigadevice-gd32f103ri/features/",
+        "K": "https://www.keil.arm.com/devices/gigadevice-gd32f103rk/features/"
+      }
+    },
+    "GD32F303": {
+      "B": {
+        "flash": 131072,
+        "ram": 32768
+      },
+      "C": {
+        "flash": 262144,
+        "ram": 49152
+      },
+      "E": {
+        "flash": 524288,
+        "ram": 65536
+      },
+      "G": {
+        "flash": 1048576,
+        "ram": 98304
+      },
+      "I": {
+        "flash": 2097152,
+        "ram": 98304
+      },
+      "K": {
+        "flash": 3145728,
+        "ram": 98304
+      },
+      "_sources": {
+        "B": "https://www.keil.arm.com/devices/gigadevice-gd32f303cb/features/",
+        "C": "https://www.keil.arm.com/devices/gigadevice-gd32f303cc/features/",
+        "E": "https://www.keil.arm.com/devices/gigadevice-gd32f303ce/features/",
+        "G": "https://www.keil.arm.com/devices/gigadevice-gd32f303cg/features/",
+        "I": "https://www.keil.arm.com/devices/gigadevice-gd32f303ri/features/",
+        "K": "https://www.keil.arm.com/devices/gigadevice-gd32f303rk/features/"
+      }
+    },
+    "GD32F405": {
+      "E": {
+        "flash": 524288,
+        "ram": 196608
+      },
+      "G": {
+        "flash": 1048576,
+        "ram": 196608
+      },
+      "K": {
+        "flash": 3145728,
+        "ram": 196608
+      },
+      "_sources": {
+        "E": "https://www.keil.arm.com/devices/gigadevice-gd32f405re/features/",
+        "G": "https://www.keil.arm.com/devices/gigadevice-gd32f405rg/features/",
+        "K": "https://www.keil.arm.com/devices/gigadevice-gd32f405rk/features/"
+      }
+    },
+    "GD32F407": {
+      "E": {
+        "flash": 524288,
+        "ram": 196608
+      },
+      "G": {
+        "flash": 1048576,
+        "ram": 196608
+      },
+      "K": {
+        "flash": 3145728,
+        "ram": 196608
+      },
+      "_sources": {
+        "E": "https://www.keil.arm.com/devices/gigadevice-gd32f407ie/features/",
+        "G": "https://www.keil.arm.com/devices/gigadevice-gd32f407ig/features/",
+        "K": "https://www.keil.arm.com/devices/gigadevice-gd32f407ik/features/"
+      }
+    },
+    "GD32F450": {
+      "E": {
+        "flash": 524288,
+        "ram": 262144
+      },
+      "G": {
+        "flash": 1048576,
+        "ram": 262144
+      },
+      "I": {
+        "flash": 2097152,
+        "ram": 524288
+      },
+      "K": {
+        "flash": 3145728,
+        "ram": 262144
+      },
+      "_sources": {
+        "E": "https://www.keil.arm.com/devices/gigadevice-gd32f450ve/features/",
+        "G": "https://www.keil.arm.com/devices/gigadevice-gd32f450vg/features/",
+        "I": "https://www.keil.arm.com/devices/gigadevice-gd32f450vi/features/",
+        "K": "https://www.keil.arm.com/devices/gigadevice-gd32f450vk/features/"
+      }
+    },
+    "GD32F130": {
+      "4": {
+        "flash": 16384,
+        "ram": 4096
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 4096
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 8192
+      },
+      "_sources": {
+        "4": "https://www.keil.arm.com/devices/gigadevice-gd32f130c4/features/",
+        "6": "https://www.keil.arm.com/devices/gigadevice-gd32f130c6/features/",
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32f130c8/features/"
+      }
+    },
+    "GD32F150": {
+      "4": {
+        "flash": 16384,
+        "ram": 4096
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 6144
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 8192
+      },
+      "_sources": {
+        "4": "https://www.keil.arm.com/devices/gigadevice-gd32f150c4/features/",
+        "6": "https://www.keil.arm.com/devices/gigadevice-gd32f150c6/features/",
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32f150c8/features/"
+      }
+    },
+    "GD32F330": {
+      "4": {
+        "flash": 16384,
+        "ram": 4096
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 4096
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 8192
+      },
+      "B": {
+        "flash": 131072,
+        "ram": 16384
+      },
+      "_sources": {
+        "4": "https://www.keil.arm.com/devices/gigadevice-gd32f330c4/features/",
+        "6": "https://www.keil.arm.com/devices/gigadevice-gd32f330c6/features/",
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32f330c8/features/",
+        "B": "https://www.keil.arm.com/devices/gigadevice-gd32f330cb/features/"
+      }
+    },
+    "GD32F350": {
+      "4": {
+        "flash": 16384,
+        "ram": 4096
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 6144
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 8192
+      },
+      "B": {
+        "flash": 131072,
+        "ram": 16384
+      },
+      "_sources": {
+        "4": "https://www.keil.arm.com/devices/gigadevice-gd32f350c4/features/",
+        "6": "https://www.keil.arm.com/devices/gigadevice-gd32f350c6/features/",
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32f350c8/features/",
+        "B": "https://www.keil.arm.com/devices/gigadevice-gd32f350cb/features/"
+      }
+    },
+    "GD32E230": {
+      "4": {
+        "flash": 16384,
+        "ram": 4096
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 6144
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 8192
+      },
+      "_sources": {
+        "4": "https://www.keil.arm.com/devices/gigadevice-gd32e230c4/features/",
+        "6": "https://www.keil.arm.com/devices/gigadevice-gd32e230c6/features/",
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32e230c8/features/"
+      }
+    },
+    "GD32E231": {
+      "4": {
+        "flash": 16384,
+        "ram": 4096
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 6144
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 8192
+      },
+      "_sources": {
+        "4": "https://www.keil.arm.com/devices/gigadevice-gd32e231c4/features/",
+        "6": "https://www.keil.arm.com/devices/gigadevice-gd32e231c6/features/",
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32e231c8/features/"
+      }
+    },
+    "GD32E103": {
+      "8": {
+        "flash": 65536,
+        "ram": 20480
+      },
+      "B": {
+        "flash": 131072,
+        "ram": 32768
+      },
+      "_sources": {
+        "8": "https://www.keil.arm.com/devices/gigadevice-gd32e103c8/features/",
+        "B": "https://www.keil.arm.com/devices/gigadevice-gd32e103cb/features/"
+      }
+    },
+    "GD32VF103": {
+      "4": {
+        "flash": 16384,
+        "ram": 6144
+      },
+      "6": {
+        "flash": 32768,
+        "ram": 10240
+      },
+      "8": {
+        "flash": 65536,
+        "ram": 20480
+      },
+      "B": {
+        "flash": 131072,
+        "ram": 32768
+      },
+      "_sources": {
+        "4": "https://raw.githubusercontent.com/CommunityGD32Cores/gigadevice-firmware-and-docs/main/GD32VF10x/GD32VF103_Firmware_Library_V1.1.3/Firmware/RISCV/env_Eclipse/GD32VF103x4.lds",
+        "6": "https://raw.githubusercontent.com/CommunityGD32Cores/gigadevice-firmware-and-docs/main/GD32VF10x/GD32VF103_Firmware_Library_V1.1.3/Firmware/RISCV/env_Eclipse/GD32VF103x6.lds",
+        "8": "https://raw.githubusercontent.com/CommunityGD32Cores/gigadevice-firmware-and-docs/main/GD32VF10x/GD32VF103_Firmware_Library_V1.1.3/Firmware/RISCV/env_Eclipse/GD32VF103x8.lds",
+        "B": "https://raw.githubusercontent.com/CommunityGD32Cores/gigadevice-firmware-and-docs/main/GD32VF10x/GD32VF103_Firmware_Library_V1.1.3/Firmware/RISCV/env_Eclipse/GD32VF103xB.lds"
+      }
+    }
+  },
+  "_memory_comment": [
+    "memory 的取值规则与依据: 键 = 型号里的容量码 (由表级 devicePattern 的第 3 个捕获组取出); 每个数字的出处 URL 列在 memory.<系列>._sources 里。查不到出处的系列/容量码整个不写, 工具会跳过该系列的容量校验 (设计接受的安全退路)。",
+    "主线来源 (除 GD32VF103 外全部系列): Arm Keil 器件数据库 /devices/gigadevice-<型号>/features/ 的 Memory 表 —— IROM1 = Flash, IRAM1 = SRAM。该表由 Arm 从 GigaDevice 官方 CMSIS DFP pack 生成, 每个 (系列, 容量码) 取一个代表型号逐个核对, URL 见 _sources。单位换算: Keil 对 1MiB/2MiB/3MiB 的 Flash 行用 MiB 显示, 本表统一按字节写入 (1 MiB = 1024 KiB)。",
+    "GD32F405/GD32F407/GD32F450 的 ram = IRAM1 + IRAM2 (Keil 的 Memory 表分两行)。依据: GD32F405RE 页 IRAM1 128 KiB + IRAM2 64 KiB, 同页文字 'SRAM size is 192 KB'; GD32F450VE 页 IRAM1 192 KiB + IRAM2 64 KiB, 同页文字 'SRAM size is 256 KB' —— 两处相加都与官方描述的 SRAM 总量一致, 故按总和登记。",
+    "GD32F450 不同容量码的 SRAM 不同: E/G/K = 256 KiB, I = 512 KiB (2MiB Flash 版本 IRAM1 448 KiB + IRAM2 64 KiB = 512 KiB, 已单独核对 GD32F450VI 页)。",
+    "GD32VF103 的 Flash/SRAM 出处不是 Keil (Arm 器件库没有 RISC-V 器件), 而是 GigaDevice 官方 GD32VF103 固件库 V1.1.3 自带的 GCC 链接脚本 MEMORY 段: GD32VF103x4.lds 'flash LENGTH = 16k / ram LENGTH = 6k', x6 = 32k/10k, x8 = 64k/20k, xB = 128k/32k (URL 见 _sources)。旁证: 本机 OpenOCD target/gd32vf103.cfg 注释 'The smallest RAM size 6kB (GD32VF103C4/T4/R4)'; 该脚本同时确认 flash ORIGIN = 0x08000000。",
+    "不写 memory 的系列: 本次收录的每个系列都拿到了逐容量码出处, 因此没有'收录了系列但不写 memory'的情况; 未收录的系列 (F101/F105/F107、F2xx、F310、F403/F425/F427/F470、F5xx、G5xx、H7xx、L23x、E5xx、W51x、VW55x、A5xx、E235、E113 等) 连 families 条目都没有, 自然也没有 memory。",
+    "已知局限: GD32VF103 的官方 datasheet 只有 PDF (本环境 web_fetch 拒绝 application/pdf), 无法直接引用其中的逐容量码表格; 这里退而用官方固件库自带的链接脚本 (同厂商发布物) 作为出处, 并已与 OpenOCD 注释交叉印证。若要更权威的出处, 需人工核对 GD32VF103 Datasheet Rev2.0 的 device overview 表。"
+  ],
+  "_probe_comment": "openocd interface 配置; doctor/burn 的默认探测顺序。三项均已在 E:\\env\\msys64\\mingw64\\share\\openocd\\scripts\\interface 下确认存在。",
+  "probes": [
+    {
+      "name": "stlink",
+      "cfg": "interface/stlink.cfg"
+    },
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    },
+    {
+      "name": "jlink",
+      "cfg": "interface/jlink.cfg"
+    }
+  ]
+}

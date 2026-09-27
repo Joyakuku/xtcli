@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "vendor": "Geehy",
+  "_comment": [
+    "xtcli 设备数据表 —— 极海半导体 (Geehy Semiconductor) APM32 系列。只放数据, 不放逻辑。",
+    "数据来源规则: 每条 cpu/fpu/memory 都取自 Geehy 官方数据手册 PDF (global.geehy.com/uploads/tool/)",
+    "或官方产品页 (global.geehy.com/product/fifth/<系列>)。URL 记在 families.<系列>._source。",
+    "本机无法用 web_fetch 读 PDF, 上述 PDF 是用 Invoke-WebRequest 下载后用 PyMuPDF 提取正文核对的,",
+    "引用时给的是官方 PDF 的稳定 URL。",
+    "",
+    "== 内核与 FPU: 逐个核对, 不默认全套 M4F ==",
+    "cortex-m0+ (无 FPU, soft): APM32F003, APM32F072 (两者手册均写 'Arm Cortex-M0+', 无 FPU 章节)",
+    "cortex-m3  (无 FPU, soft): APM32F103, APM32F107/105 —— 见下方 FPU 特别说明",
+    "cortex-m4  (硬浮点, hard): APM32F407/405",
+    "",
+    "== !! FPU 特别说明: APM32F103xDxE 的 FPU 不是 Cortex-M4 那种 FPU !! ==",
+    "Geehy 官方产品页对 APM32F103 写 'Cortex-M3 / 96MHz / Support FPU',",
+    "APM32F103xDxE 数据手册也写 'Independent FPU module supports floating point operations',",
+    "表 1 里 FPU 一栏记 1, 页面可见 'FPUCLK Prescaler /1,2'。",
+    "但该 FPU 是**接在 AHB 总线上的独立外设**, 不是 Cortex-M4 的 VFP 协处理器:",
+    "  - 手册地址映射表明确给出 FPU 寄存器基址 = 0x4002 4000 (peripheral 区),",
+    "  - 手册 3.10 节: 'The product has built-in independent FPU floating-point operation processing unit,",
+    "    supports IEEE754 standard, supports single-precision floating-point operation, and supports",
+    "    algorithms such as CMP, SUM, SUB, PRDCT, MAC, DIV, INVRGSQT, SUMSQ, DOT ...'",
+    "  - 即它靠读写寄存器+专用 API 使用, 而不是 VFP 指令。",
+    "结论: **绝对不能用** '-mfpu=fpv4-sp-d16 -mfloat-abi=hard' —— 那会生成 VFP 指令,",
+    "Cortex-M3 上不存在这些指令 (硬 fault) 且 ABI 与库不匹配。",
+    "所以 APM32F103 / APM32F107 一律写 '-mfloat-abi=soft' (软件浮点, 任何 M3 上都正确运行),",
+    "同时把'该型号另有独立 FPU 外设'记在 _note 里, 需要时由工程自己调用它的驱动。",
+    "此点已逐条核对 APM32F103xDxE 数据手册 (V2.2) 第 2/9/10/15/34/35/37 页。",
+    "",
+    "== ocd 全表为 null: 本机 OpenOCD 没有 APM32 的 target 配置 ==",
+    "已用 pwsh 实测本机脚本目录 E:\\env\\msys64\\mingw64\\share\\openocd\\scripts\\target (307 个 cfg):",
+    "匹配 apm32* / geehy* 的文件数为 0。APM32F103 与 STM32F103 引脚/寄存器高度相似,",
+    "但'相似'不等于'相同', 用 stm32f1x.cfg 去烧 APM32 属于未经验证的猜测,",
+    "一旦 Flash 控制器时序或 option byte 布局有差异就会写坏芯片, 因此全部写 null。",
+    "后果与退路: ocd 为 null 时 xtcli 的烧录/探针自检会走显式 -OcdTarget 或跳过, 属于设计接受的缺键退路。",
+    "",
+    "== memory: 整表用 models 精确型号 ==",
+    "APM32 命名与 STM32 同构 (<系列><引脚码><容量码><封装/温度>), 容量码确实在固定位置,",
+    "本可尝试按容量码建表; 但容量码含义**跨系列不一致**(F103xDxE 里 D=384K/E=512K,",
+    "而 F107 里 B=128K/C=256K), 且型号后缀写法多样 (T6/T7/U6/Ux/Tx)。",
+    "为避免任何切分歧义, 统一按题目允许的退路使用 models 精确型号表,",
+    "每个数字都来自官方 PDF 的 'Table 1' 器件表, 见 _memory_comment。"
+  ],
+  "families": {
+    "APM32F003": {
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://global.geehy.com/uploads/tool/APM32F003x4x6%20datasheet%20V2.4.pdf",
+      "_note": "48MHz Cortex-M0+ (无 FPU); 依据该 PDF Table 1 的 'Core: Arm Cortex-M0+ / Frequency 48MHz' 与产品页。ocd 本机缺失"
+    },
+    "APM32F072": {
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://global.geehy.com/uploads/tool/APM32F072x8xB%20Datasheet%20V2.0.pdf",
+      "_note": "48MHz Cortex-M0+ (无 FPU); PDF Table 1: 'Arm 32-bit Cortex-M0+@48MHz'。产品页写作 'ARM Cortex-M0+'。ocd 本机缺失"
+    },
+    "APM32F103": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://global.geehy.com/uploads/tool/APM32F103xDxE%20Datasheet%20V2.2.pdf",
+      "_note": "96MHz Cortex-M3。xDxE 手册另有 'Independent FPU module' (AHB 外设, 基址 0x4002 4000), **不是** VFP 协处理器, 因此必须 -mfloat-abi=soft, 详见 _comment 的 FPU 特别说明。ocd 本机缺失"
+    },
+    "APM32F107": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://global.geehy.com/uploads/tool/APM32F107%20105xx%20Datasheet%20V1.2.pdf",
+      "_note": "96MHz Cortex-M3, 无 FPU (手册无 FPU 章节); 本键同时覆盖 APM32F105/APM32F107 (该 PDF 标题即 'APM32F107 105xx'), 两者内核/容量表一致, 差别仅在 Ethernet (F107 有)。ocd 本机缺失"
+    },
+    "APM32F105": {
+      "cpu": "cortex-m3",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://global.geehy.com/uploads/tool/APM32F107%20105xx%20Datasheet%20V1.2.pdf",
+      "_note": "96MHz Cortex-M3, 无 FPU; 与 APM32F107 同表同内核, 差别仅 Ethernet (F105 无)。单独立键是为了在最长前缀匹配下不被 APM32F1 之类的短键影响, 也便于以后分化。ocd 本机缺失"
+    },
+    "APM32F407": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://global.geehy.com/uploads/tool/APM32F405xG%20407xExG%20datasheet%20V1.7.pdf",
+      "_note": "168MHz Cortex-M4F, 有单精度 FPU; PDF cover/features: 'Arm Cortex-M4F -based 32-bit MCU', 'FPU -', 产品页 'Support single FPU'。ocd 本机缺失"
+    },
+    "APM32F405": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://global.geehy.com/uploads/tool/APM32F405xG%20407xExG%20datasheet%20V1.7.pdf",
+      "_note": "168MHz Cortex-M4F; Table 1 与 APM32F407 同表 ('Arm 32-bit Cortex-M4F@168MHz', 192+4KB SRAM), 差别仅 Ethernet (405 无)。ocd 本机缺失"
+    }
+  },
+  "flashBase": "0x08000000",
+  "devicePattern": "^([A-Z]{2,5}\\d+[A-Z]?\\d*)([A-Z])([A-Z0-9])",
+  "_devicePattern_comment": [
+    "APM32 命名与 STM32 同构: <系列><引脚码><容量码><封装/温度>, 例 APM32F103RCT7 = R(引脚)+C(容量)+T7。",
+    "但**本表 memory 不依赖该正则**, 统一用 models 精确型号键; devicePattern 仅作说明性元数据保留,",
+    "原因见 _memory_comment: 容量码含义跨系列不一致, 且后缀写法多样, 用正则切分有实际风险。",
+    "已核对的实型号切分举例 (改进版正则):",
+    "  APM32F103RCT7 -> APM32F103 / R / C   (256KB/64KB, 手册 Table 1 确认)",
+    "  APM32F103RD    -> APM32F103 / R / D   (384KB/64KB, xDxE 手册 Table 1 确认)",
+    "  APM32F103RET6  -> APM32F103 / R / E   (512KB/128KB, xDxE 手册 Table 1 确认)",
+    "  APM32F103C8T6  -> APM32F103 / C / 8   (64KB/20KB,   x4x6x8 手册 Table 1 确认)",
+    "  APM32F107RBT6  -> APM32F107 / R / B   (128KB/64KB,  F107/105 手册 Table 1 确认)",
+    "  APM32F072C8Tx  -> APM32F072 / C / 8   (64KB/16KB,   F072 手册 Table 1 确认)",
+    "  APM32F003F6Ux  -> APM32F003 / F / 6   (32KB/4KB,    F003 手册 Table 1 确认)",
+    "  APM32F407ZGT6  -> APM32F407 / Z / G   (1024KB/192+4KB, F407/405 手册 Table 1 确认)",
+    "注意末尾一位在部分表里是 'x' (如 RETx/RGTx), 表示封装无关; models 表对 'T6' 与 'Tx' 两种写法都登记。"
+  ],
+  "memory": {
+    "APM32F003": {
+      "models": {
+        "APM32F003F4P6": {"flash": 16384, "ram": 2048},
+        "APM32F003F6P6": {"flash": 32768, "ram": 4096},
+        "APM32F003F4U6": {"flash": 16384, "ram": 2048},
+        "APM32F003F6U6": {"flash": 32768, "ram": 4096},
+        "APM32F003F6U7": {"flash": 32768, "ram": 4096},
+        "APM32F003F6UX": {"flash": 32768, "ram": 4096},
+        "APM32F003F4M6": {"flash": 16384, "ram": 2048},
+        "APM32F003F6M6": {"flash": 32768, "ram": 4096}
+      }
+    },
+    "APM32F072": {
+      "models": {
+        "APM32F072C8U6": {"flash": 65536, "ram": 16384},
+        "APM32F072C8U7": {"flash": 65536, "ram": 16384},
+        "APM32F072C8Ux": {"flash": 65536, "ram": 16384},
+        "APM32F072C8T6": {"flash": 65536, "ram": 16384},
+        "APM32F072C8T7": {"flash": 65536, "ram": 16384},
+        "APM32F072C8Tx": {"flash": 65536, "ram": 16384},
+        "APM32F072R8T6": {"flash": 65536, "ram": 16384},
+        "APM32F072R8T7": {"flash": 65536, "ram": 16384},
+        "APM32F072R8Tx": {"flash": 65536, "ram": 16384},
+        "APM32F072V8T6": {"flash": 65536, "ram": 16384},
+        "APM32F072V8T7": {"flash": 65536, "ram": 16384},
+        "APM32F072V8Tx": {"flash": 65536, "ram": 16384},
+        "APM32F072CBU6": {"flash": 131072, "ram": 16384},
+        "APM32F072CBU7": {"flash": 131072, "ram": 16384},
+        "APM32F072CBUx": {"flash": 131072, "ram": 16384},
+        "APM32F072CBT6": {"flash": 131072, "ram": 16384},
+        "APM32F072CBT7": {"flash": 131072, "ram": 16384},
+        "APM32F072RBT6": {"flash": 131072, "ram": 16384},
+        "APM32F072RBT7": {"flash": 131072, "ram": 16384},
+        "APM32F072VBT6": {"flash": 131072, "ram": 16384},
+        "APM32F072VBT7": {"flash": 131072, "ram": 16384},
+        "APM32F072VBTx": {"flash": 131072, "ram": 16384}
+      }
+    },
+    "APM32F103": {
+      "models": {
+        "APM32F103T4U6": {"flash": 16384, "ram": 6144},
+        "APM32F103T6U6": {"flash": 32768, "ram": 10240},
+        "APM32F103T8U6": {"flash": 65536, "ram": 20480},
+        "APM32F103C4T6": {"flash": 16384, "ram": 6144},
+        "APM32F103C6T6": {"flash": 32768, "ram": 10240},
+        "APM32F103C8T6": {"flash": 65536, "ram": 20480},
+        "APM32F103C8T7": {"flash": 65536, "ram": 20480},
+        "APM32F103R4T6": {"flash": 16384, "ram": 6144},
+        "APM32F103R6T6": {"flash": 32768, "ram": 10240},
+        "APM32F103R8T6": {"flash": 65536, "ram": 20480},
+        "APM32F103CCTx": {"flash": 262144, "ram": 65536},
+        "APM32F103RCT6": {"flash": 262144, "ram": 65536},
+        "APM32F103RCT7": {"flash": 262144, "ram": 65536},
+        "APM32F103VCT6": {"flash": 262144, "ram": 65536},
+        "APM32F103VCTx": {"flash": 262144, "ram": 65536},
+        "APM32F103VCTxS": {"flash": 262144, "ram": 65536},
+        "APM32F103RDT6": {"flash": 393216, "ram": 65536},
+        "APM32F103RD": {"flash": 393216, "ram": 65536},
+        "APM32F103VDT6": {"flash": 393216, "ram": 65536},
+        "APM32F103VD": {"flash": 393216, "ram": 65536},
+        "APM32F103ZDT6": {"flash": 393216, "ram": 65536},
+        "APM32F103ZD": {"flash": 393216, "ram": 65536},
+        "APM32F103RET6": {"flash": 524288, "ram": 131072},
+        "APM32F103RE": {"flash": 524288, "ram": 131072},
+        "APM32F103VET6": {"flash": 524288, "ram": 131072},
+        "APM32F103VE": {"flash": 524288, "ram": 131072},
+        "APM32F103ZET6": {"flash": 524288, "ram": 131072},
+        "APM32F103ZE": {"flash": 524288, "ram": 131072}
+      }
+    },
+    "APM32F107": {
+      "models": {
+        "APM32F107RBT6": {"flash": 131072, "ram": 65536},
+        "APM32F107RCT6": {"flash": 262144, "ram": 65536},
+        "APM32F107VBT6": {"flash": 131072, "ram": 65536},
+        "APM32F107VCT6": {"flash": 262144, "ram": 65536}
+      }
+    },
+    "APM32F105": {
+      "models": {
+        "APM32F105R8T6": {"flash": 65536, "ram": 65536},
+        "APM32F105RBT6": {"flash": 131072, "ram": 65536},
+        "APM32F105RCT6": {"flash": 262144, "ram": 65536},
+        "APM32F105V8T6": {"flash": 65536, "ram": 65536},
+        "APM32F105VBT6": {"flash": 131072, "ram": 65536},
+        "APM32F105VCT6": {"flash": 262144, "ram": 65536}
+      }
+    },
+    "APM32F407": {
+      "models": {
+        "APM32F407RET6": {"flash": 524288, "ram": 200704},
+        "APM32F407RGT6": {"flash": 1048576, "ram": 200704},
+        "APM32F407RGTx": {"flash": 1048576, "ram": 200704},
+        "APM32F407VET6": {"flash": 524288, "ram": 200704},
+        "APM32F407VGT6": {"flash": 1048576, "ram": 200704},
+        "APM32F407VGTx": {"flash": 1048576, "ram": 200704},
+        "APM32F407ZET6": {"flash": 524288, "ram": 200704},
+        "APM32F407ZGT6": {"flash": 1048576, "ram": 200704},
+        "APM32F407ZGTx": {"flash": 1048576, "ram": 200704},
+        "APM32F407IET6": {"flash": 524288, "ram": 200704},
+        "APM32F407IGT6": {"flash": 1048576, "ram": 200704}
+      }
+    },
+    "APM32F405": {
+      "models": {
+        "APM32F405RGT6": {"flash": 1048576, "ram": 200704},
+        "APM32F405VGT6": {"flash": 1048576, "ram": 200704},
+        "APM32F405ZGT6": {"flash": 1048576, "ram": 200704}
+      }
+    }
+  },
+  "_memory_comment": [
+    "键 = 精确型号 (含温度/封装后缀), 值 = 该型号的 Flash/SRAM 字节数。",
+    "厂商表给的是 KB, 本表统一换算为字节 (= KB * 1024)。所有数字均为官方 PDF 'Table 1' 器件表直读。",
+    "",
+    "== 逐系列出处 ==",
+    "APM32F003 —— APM32F003x4x6 datasheet V2.4, Table 1 'The APM32F003x4x6 product functions':",
+    "  F4P6/F4U6/F4M6 = 16KB Flash / 2KB SRAM;  F6P6/F6U6/F6M6 = 32KB Flash / 4KB SRAM。",
+    "  (封装: P=TSSOP20, U=QFN20, M=SOP20)。另有 F6Ux 型号的 F003F6Ux datasheet V1.4 记 32KB/4KB, 一致。",
+    "APM32F072 —— APM32F072x8xB Datasheet V2.0, Table 1 'APM32F072x8xB Series Chip Functions':",
+    "  x8 -> 64KB Flash; xB -> 128KB Flash; SRAM 全列 16KB。型号按 C8Ux/C8Tx/R8Tx/V8Tx 与",
+    "  CBUx/CBT6/RBT6/VBTx 登记, 温度后缀 6/7 两种写法都补上 (6=-40~85C, 7=-40~105C)。",
+    "APM32F103 —— 分三本手册, 各自 Table 1:",
+    "  (a) APM32F103x4x6x8 datasheet V1.5, Table 1: T4U6/T6U6/T8U6 (QFN36), C4T6/C6T6/C8T6 (LQFP48),",
+    "      R4T6/R6T6/R8T6 (LQFP64); Flash 16/32/64KB, SRAM 6/10/20KB。",
+    "  (b) APM32F103xC datasheet V2.1, Table 1: CCTx/RCT6/VCTx/VCTxS; Flash 全 256KB, SRAM 全 64KB。",
+    "  (c) APM32F103xDxE Datasheet V2.2, Table 1: RD/RE (Rx, LQFP64), VD/VE (Vx, LQFP100), ZD/ZE (Zx, LQFP144);",
+    "      Flash D=384KB / E=512KB, SRAM D=64KB / E=128KB。",
+    "APM32F107 / APM32F105 —— APM32F107 105xx Datasheet V1.2, Table 1:",
+    "  F105: R8T6/V8T6=64KB, RBT6/VBT6=128KB, RCT6/VCT6=256KB; F107: RBT6/VBT6=128KB, RCT6/VCT6=256KB;",
+    "  SRAM 全列 64KB。",
+    "APM32F407 / APM32F405 —— APM32F405xG 407xExG datasheet V1.7, Table 1:",
+    "  407: RET6/VET6/ZET6/IET6=512KB, RGTx/VGTx/ZGT6/IGT6=1MB; 405: RGT6/VGT6/ZGT6=1MB;",
+    "  SRAM 全列 'System + backup SRAM(KB) = 192+4' -> (192+4)*1024 = 200704 字节。",
+    "",
+    "== 取舍原则 ==",
+    "只登记能在官方 Table 1 里逐型号对上号的组合; 表里没有的封装/容量组合一律不写。",
+    "含 'x' 的写法 (RETx/RGTx/C8Tx) 按手册原样登记, 'T6' 与 'T7' 也分别登记,",
+    "因为 xtcli 是按精确型号查表, 少登一个写法只是'跳过校验', 而猜一个写法可能误判尺寸。",
+    "没有登记的型号/系列 = memory_for 返回 None -> 直接**跳过校验**: 设计接受的退路, 比猜测安全。"
+  ],
+  "_probe_comment": "openocd interface 配置; 已核对本机 E:\\env\\msys64\\mingw64\\share\\openocd\\scripts\\interface 下这三个 cfg 确实存在。",
+  "probes": [
+    {
+      "name": "stlink",
+      "cfg": "interface/stlink.cfg"
+    },
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    },
+    {
+      "name": "jlink",
+      "cfg": "interface/jlink.cfg"
+    }
+  ]
+}

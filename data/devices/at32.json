@@ -1,0 +1,358 @@
+{
+  "schema_version": 1,
+  "vendor": "Artery",
+  "_comment": [
+    "xtcli 设备数据表 —— 雅特力科技 (Artery Technology) AT32 系列。只放数据, 不放逻辑。",
+    "数据来源规则: 每一条 cpu/fpu/memory 都取自 Artery 官网 (www.arterychip.com / www.arterytek.com)",
+    "对应系列产品页的 'Key Features / Product Selector' 表格, URL 记在 families.<系列>._source。",
+    "官方 datasheet 是 PDF, 而 PDF 的下载路径带 jsessionid 且本工具链无法解析 PDF 文本,",
+    "所以统一引用同一个 .jsp 产品页 —— 该页同时给出内核标题(如 'Cortex-M4F')、",
+    "Key Features 里的 'Floating point unit (FPU)' 有无, 以及按容量码分列的 Flash/SRAM 表。",
+    "",
+    "== 内核与 FPU: 逐个核对, 不默认全套 M4F ==  ",
+    "带 FPU (hard)  : AT32F403A, AT32F407, AT32F435, AT32F437, AT32F402, AT32F405, AT32F413, AT32F423",
+    "  —— 依据: 产品页标题写作 'Cortex-M4F' / 'ARM Cortex-M4F AT32Fxxx Product Selector',",
+    "     且 Key Features 明确列出 'Floating point unit (FPU)'。",
+    "不带 FPU (soft): AT32F415, AT32F421, AT32WB415",
+    "  —— 依据: 产品页标题只写 'Cortex-M4' (没有 F), Key Features 只列 'DSP instructions' 而没有 FPU 一项,",
+    "     Product Selector 表头也写 'ARM Cortex-M4'。这三者按 -mfloat-abi=soft 处理。",
+    "",
+    "== ocd 全表为 null: 本机 OpenOCD 没有 AT32 的 target 配置 ==",
+    "已用 pwsh 实测本机脚本目录 E:\\env\\msys64\\mingw64\\share\\openocd\\scripts\\target (307 个 cfg):",
+    "唯一匹配 at32* 的是 at32ap7000.cfg, 那是 Atmel/Microchip 的 AT32AP7000 (AVR32 AP7 应用处理器),",
+    "与雅特力的 AT32F/AT32WB 毫无关系。除此之外没有任何 artery/at32f/at32wb 目标脚本。",
+    "因此**全部** families 的 ocd 都写 null, 不用别的厂商 cfg 代替 —— 那会导致给错误芯片烧录。",
+    "后果与退路: ocd 为 null 时 xtcli 的烧录/探针自检会走显式 -OcdTarget 或跳过, 属于设计接受的缺键退路。",
+    "",
+    "== memory: 整表用 models 精确型号, 不按容量码建表 (AT32 命名不符) ==",
+    "题目允许在厂商命名不符时改用 models 精确表。AT32 正是这种情况:",
+    "默认 devicePattern 在 AT32 上无法切出容量码 (group(2) 恒为 'F'), 详见 _devicePattern_comment;",
+    "故 memory.<系列>.models 用精确型号做键, 每个数字都有产品页 Product Selector 的出处,",
+    "逐系列说明见 _memory_comment。",
+    "没写的系列/型号 = 没有可直接引用的官方数字 (见 _memory_comment 逐条说明)。"
+  ],
+  "families": {
+    "AT32F403A": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://www.arterychip.com/en/product/AT32F403A.jsp",
+      "_note": "240MHz Cortex-M4F; 产品页 Key Features 列 'Floating point unit (FPU)'; 标题为 Cortex-M4F。ocd 本机缺失"
+    },
+    "AT32F407": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.arterychip.com/en/product/AT32F407.jsp",
+      "_note": "240MHz Cortex-M4F (带 Ethernet MAC); 产品页 Key Features 列 'Floating point unit (FPU)'。ocd 本机缺失"
+    },
+    "AT32F435": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.arterychip.com/en/product/AT32F435.jsp",
+      "_note": "288MHz Cortex-M4F; Key Features 列 'Single precision floating-point unit (FPU)'。ocd 本机缺失"
+    },
+    "AT32F437": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.arterychip.com/en/product/AT32F437.jsp",
+      "_note": "288MHz Cortex-M4F (带 Ethernet MAC); Key Features 列 'Single precision floating-point unit (FPU)'。ocd 本机缺失"
+    },
+    "AT32F402": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.arterychip.com/en/product/AT32F402.jsp",
+      "_note": "216MHz Cortex-M4F; 标题 'Cortex-M4F', Key Features 列 'Single precision floating-point unit (FPU)'。ocd 本机缺失"
+    },
+    "AT32F405": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.arterychip.com/en/product/AT32F405.jsp",
+      "_note": "216MHz Cortex-M4F (HS+FS USB OTG); 标题 'Cortex-M4F', Key Features 列 FPU。ocd 本机缺失"
+    },
+    "AT32F413": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.arterychip.com/en/product/AT32F413.jsp",
+      "_note": "200MHz Cortex-M4F; 标题 'Cortex-M4F', Key Features 列 'Floating point unit (FPU)'。ocd 本机缺失"
+    },
+    "AT32F415": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://www.arterychip.com/en/product/AT32F415.jsp",
+      "_note": "150MHz Cortex-M4 **无 FPU**: 产品页标题只写 'Cortex-M4'(不带 F), Key Features 只有 'DSP instructions' 而无 FPU 一项, Product Selector 表头为 'ARM Cortex-M4'。故 -mfloat-abi=soft。ocd 本机缺失"
+    },
+    "AT32F421": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://www.arterychip.com/en/product/AT32F421.jsp",
+      "_note": "120MHz Cortex-M4 **无 FPU**: 标题/表头均写 'Cortex-M4'(不带 F), Key Features 只有 'DSP instructions'。故 -mfloat-abi=soft。ocd 本机缺失"
+    },
+    "AT32F423": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfpu=fpv4-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://www.arterychip.com/en/product/AT32F423.jsp",
+      "_note": "150MHz Cortex-M4F; 标题与表头均为 'Cortex-M4F', Key Features 列 'Single precision floating-point unit (FPU)'。ocd 本机缺失"
+    },
+    "AT32WB415": {
+      "cpu": "cortex-m4",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": null,
+      "subseries": [],
+      "_source": "https://www.arterychip.com/en/product/AT32WB415.jsp",
+      "_note": "150MHz Cortex-M4 + BLE5.0 **无 FPU**: 标题 'Arm Cortex-M4 MCU 150 MHz', Key Features 只有 'DSP instructions'。故 -mfloat-abi=soft。ocd 本机缺失"
+    }
+  },
+  "flashBase": "0x08000000",
+  "devicePattern": "^([A-Z]{2,5}\\d+[A-Z]?\\d*)([A-Z])([A-Z0-9])",
+  "_devicePattern_comment": [
+    "用途: 从型号里切出 '系列段 / 引脚码 / 容量码' 三段。AT32 命名是 <系列><引脚码><容量码><封装码>,",
+    "例: AT32F403AVGT7 -> 系列 AT32F403A / 引脚 V / 容量 G / 封装 T7。",
+    "",
+    "!! 为什么本表的 memory 最终用 models 而不是容量码 !!",
+    "题目给的默认正则 '^([A-Z]{2,5}\\\\d+[A-Z]?)([A-Z])([A-Z0-9])' 在 AT32 上**不能**切出这三段。",
+    "已实测: 它的第一组 [A-Z]{2,5} 会贪婪匹配到 'AT32', 于是 group(2) 落到所有型号共同的那个 'F' 上,",
+    "group(3) 恒为数字 4 —— AT32F403AVGT7 / AT32F421K8U7 / AT32F435ZMT7 全部切出同一个 (AT32,F,4)。",
+    "根本原因: 系列名长度不固定('AT32F403A' 与 'AT32F421' 都合法), 同一个正则无法同时切对两者。",
+    "因此按题目允许的退路改用 models 精确型号表, 见 _memory_comment 顶部说明。",
+    "",
+    "这里保留的 devicePattern 是给'能自行指定系列段的调用方'用的改进版:",
+    "把系列段写成 ([A-Z]{2,5}\\\\d+[A-Z]?\\\\d*) 并要求其**必须**以 <引脚码><容量码> 收尾。",
+    "实测结果(第一组少写一位的已知副作用用括号标出):",
+    "  AT32F403AVGT7   -> AT32F403 / A / V  (系列段少了尾字母 A, 属已知局限)",
+    "  AT32F435ZMT7    -> AT32F435 / Z / M",
+    "  AT32F423VCT7    -> AT32F423 / V / C",
+    "  AT32F415C8T7    -> AT32F415 / C / 8",
+    "  AT32F402CBT7    -> AT32F402 / C / B",
+    "  AT32F421K8U7-4  -> AT32F421 / K / 8",
+    "  AT32F413RCT7    -> AT32F413 / R / C",
+    "  AT32F407VGT7    -> AT32F407 / V / G",
+    "反例(切不对, 因为根本没有独立的引脚码位): AT32F403CCU7 / AT32WB415CCU7-7。",
+    "结论: 该正则只在'从 AT32 型号中切容量码'这一件事上比默认版正确, 但仍不是全系列通用,",
+    "所以 memory 最终不依赖它。"
+  ],
+  "memory": {
+    "AT32F403A": {
+      "models": {
+        "AT32F403AVGT7": {"flash": 1048576, "ram": 229376},
+        "AT32F403AVET7": {"flash": 524288, "ram": 229376},
+        "AT32F403AVCT7": {"flash": 262144, "ram": 229376},
+        "AT32F403ARGT7": {"flash": 1048576, "ram": 229376},
+        "AT32F403ARET7": {"flash": 524288, "ram": 229376},
+        "AT32F403ARCT7": {"flash": 262144, "ram": 229376},
+        "AT32F403ACGT7": {"flash": 1048576, "ram": 229376},
+        "AT32F403ACET7": {"flash": 524288, "ram": 229376},
+        "AT32F403ACCT7": {"flash": 262144, "ram": 229376},
+        "AT32F403ACGU7": {"flash": 1048576, "ram": 229376},
+        "AT32F403ACEU7": {"flash": 524288, "ram": 229376},
+        "AT32F403ACCU7": {"flash": 262144, "ram": 229376}
+      }
+    },
+    "AT32F407": {
+      "models": {
+        "AT32F407VGT7": {"flash": 1048576, "ram": 229376},
+        "AT32F407VET7": {"flash": 524288, "ram": 229376},
+        "AT32F407VCT7": {"flash": 262144, "ram": 229376},
+        "AT32F407RGT7": {"flash": 1048576, "ram": 229376},
+        "AT32F407RET7": {"flash": 524288, "ram": 229376},
+        "AT32F407RCT7": {"flash": 262144, "ram": 229376}
+      }
+    },
+    "AT32F402": {
+      "models": {
+        "AT32F402CBT7": {"flash": 131072, "ram": 71680},
+        "AT32F402CCT7": {"flash": 262144, "ram": 104448},
+        "AT32F402RBT7": {"flash": 131072, "ram": 71680},
+        "AT32F402RCT7": {"flash": 262144, "ram": 104448},
+        "AT32F402CBU7": {"flash": 131072, "ram": 71680},
+        "AT32F402CCU7": {"flash": 262144, "ram": 104448}
+      }
+    },
+    "AT32F405": {
+      "models": {
+        "AT32F405CBT7": {"flash": 131072, "ram": 71680},
+        "AT32F405CCT7": {"flash": 262144, "ram": 104448},
+        "AT32F405RBT7": {"flash": 131072, "ram": 71680},
+        "AT32F405RCT7": {"flash": 262144, "ram": 104448},
+        "AT32F405CBU7": {"flash": 131072, "ram": 71680},
+        "AT32F405CCU7": {"flash": 262144, "ram": 104448}
+      }
+    },
+    "AT32F413": {
+      "models": {
+        "AT32F413C8T7": {"flash": 65536, "ram": 32768},
+        "AT32F413CBT7": {"flash": 131072, "ram": 32768},
+        "AT32F413CCT7": {"flash": 262144, "ram": 32768},
+        "AT32F413RBT7": {"flash": 131072, "ram": 32768},
+        "AT32F413RCT7": {"flash": 262144, "ram": 32768},
+        "AT32F413KBU7": {"flash": 131072, "ram": 32768},
+        "AT32F413KCU7": {"flash": 262144, "ram": 32768}
+      }
+    },
+    "AT32F415": {
+      "models": {
+        "AT32F415C8T7": {"flash": 65536, "ram": 32768},
+        "AT32F415CBT7": {"flash": 131072, "ram": 32768},
+        "AT32F415CCT7": {"flash": 262144, "ram": 32768},
+        "AT32F415R8T7": {"flash": 65536, "ram": 32768},
+        "AT32F415RBT7": {"flash": 131072, "ram": 32768},
+        "AT32F415RCT7": {"flash": 262144, "ram": 32768},
+        "AT32F415K8U7": {"flash": 65536, "ram": 32768},
+        "AT32F415KBU7": {"flash": 131072, "ram": 32768},
+        "AT32F415KCU7": {"flash": 262144, "ram": 32768}
+      }
+    },
+    "AT32F421": {
+      "models": {
+        "AT32F421C4T7": {"flash": 16384, "ram": 8192},
+        "AT32F421C6T7": {"flash": 32768, "ram": 16384},
+        "AT32F421C8T7": {"flash": 65536, "ram": 16384},
+        "AT32F421K4T7": {"flash": 16384, "ram": 8192},
+        "AT32F421K6T7": {"flash": 32768, "ram": 16384},
+        "AT32F421K8T7": {"flash": 65536, "ram": 16384},
+        "AT32F421F4P7": {"flash": 16384, "ram": 8192},
+        "AT32F421F6P7": {"flash": 32768, "ram": 16384},
+        "AT32F421F8P7": {"flash": 65536, "ram": 16384},
+        "AT32F421G4U7": {"flash": 16384, "ram": 8192},
+        "AT32F421G6U7": {"flash": 32768, "ram": 16384},
+        "AT32F421G8U7": {"flash": 65536, "ram": 16384}
+      }
+    },
+    "AT32F423": {
+      "models": {
+        "AT32F423C8T7": {"flash": 65536, "ram": 32768},
+        "AT32F423CBT7": {"flash": 131072, "ram": 49152},
+        "AT32F423CCT7": {"flash": 262144, "ram": 49152},
+        "AT32F423R8T7": {"flash": 65536, "ram": 32768},
+        "AT32F423RBT7": {"flash": 131072, "ram": 49152},
+        "AT32F423RCT7": {"flash": 262144, "ram": 49152},
+        "AT32F423V8T7": {"flash": 65536, "ram": 32768},
+        "AT32F423VBT7": {"flash": 131072, "ram": 49152},
+        "AT32F423VCT7": {"flash": 262144, "ram": 49152},
+        "AT32F423T8T7": {"flash": 65536, "ram": 32768},
+        "AT32F423TBT7": {"flash": 131072, "ram": 49152},
+        "AT32F423TCT7": {"flash": 262144, "ram": 49152},
+        "AT32F423K8U7": {"flash": 65536, "ram": 32768},
+        "AT32F423KBU7": {"flash": 131072, "ram": 49152},
+        "AT32F423KCU7": {"flash": 262144, "ram": 49152}
+      }
+    },
+    "AT32F435": {
+      "models": {
+        "AT32F435CCT7": {"flash": 262144, "ram": 524288},
+        "AT32F435CDT7": {"flash": 458752, "ram": 524288},
+        "AT32F435CPT7": {"flash": 983040, "ram": 524288},
+        "AT32F435CGT7": {"flash": 1048576, "ram": 524288},
+        "AT32F435CIT7": {"flash": 2031616, "ram": 524288},
+        "AT32F435RCT7": {"flash": 262144, "ram": 524288},
+        "AT32F435RDT7": {"flash": 458752, "ram": 524288},
+        "AT32F435RPT7": {"flash": 983040, "ram": 524288},
+        "AT32F435RGT7": {"flash": 1048576, "ram": 524288},
+        "AT32F435RIT7": {"flash": 2031616, "ram": 524288},
+        "AT32F435VCT7": {"flash": 262144, "ram": 524288},
+        "AT32F435VDT7": {"flash": 458752, "ram": 524288},
+        "AT32F435VPT7": {"flash": 983040, "ram": 524288},
+        "AT32F435VGT7": {"flash": 1048576, "ram": 524288},
+        "AT32F435VIT7": {"flash": 2031616, "ram": 524288},
+        "AT32F435ZCT7": {"flash": 262144, "ram": 524288},
+        "AT32F435ZDT7": {"flash": 458752, "ram": 524288},
+        "AT32F435ZPT7": {"flash": 983040, "ram": 524288},
+        "AT32F435ZGT7": {"flash": 1048576, "ram": 524288},
+        "AT32F435ZIT7": {"flash": 2031616, "ram": 524288}
+      }
+    },
+    "AT32F437": {
+      "models": {
+        "AT32F437RCT7": {"flash": 262144, "ram": 524288},
+        "AT32F437RDT7": {"flash": 458752, "ram": 524288},
+        "AT32F437RPT7": {"flash": 983040, "ram": 524288},
+        "AT32F437RGT7": {"flash": 1048576, "ram": 524288},
+        "AT32F437RIT7": {"flash": 2031616, "ram": 524288},
+        "AT32F437VCT7": {"flash": 262144, "ram": 524288},
+        "AT32F437VDT7": {"flash": 458752, "ram": 524288},
+        "AT32F437VPT7": {"flash": 983040, "ram": 524288},
+        "AT32F437VGT7": {"flash": 1048576, "ram": 524288},
+        "AT32F437VIT7": {"flash": 2031616, "ram": 524288}
+      }
+    },
+    "AT32WB415": {
+      "models": {
+        "AT32WB415CCU7-7": {"flash": 262144, "ram": 32768}
+      }
+    }
+  },
+  "_memory_comment": [
+    "== 本表为什么整表用 models 精确型号, 而不是容量码键 ==",
+    "题目允许两条路: 优先按容量码建表, 命名不符时改成 models 精确表并在 _comment 说明。",
+    "AT32 走的正是 models 这条路, 原因是**容量码无法可靠切出** (实测, 不是推测):",
+    "  题目给的默认正则 '^([A-Z]{2,5}\\\\d+[A-Z]?)([A-Z])([A-Z0-9])' 在 AT32 上 group(2) 恒为 'F'、group(3) 恒为 '4',",
+    "  因为 [A-Z]{2,5} 贪婪吃掉 'AT32' 后, 下一个字符对所有 AT32 型号都是系列名里的 'F'。",
+    "  详见 _devicePattern_comment 里的实测输出。",
+    "根因是 AT32 系列名长度不固定: 'AT32F403A'(带尾字母) 与 'AT32F421'(不带) 都合法,",
+    "任何单一正则都无法同时切对这两类, 所以按容量码建表在 AT32 上不可靠。",
+    "改用精确型号键后完全不需要正则, 命中即精确, 不存在切错的风险。",
+    "",
+    "== 数字出处 ==",
+    "每个数字都来自该系列产品页 Product Selector 表的 Flash/SRAM 行, URL 见 families.<系列>._source;",
+    "厂商给的是 KB, 本表统一换算为字节 (= KB * 1024)。逐个系列说明:",
+    "AT32F403A (…/AT32F403A.jsp): 总 Flash 256/512/1024KB 对应容量码 CC/CE/CG; SRAM 表列 '96+128'KB,",
+    "  脚注 2 明说 AT32F403AVGT7 可配成 'ZW:128KB, NZW:896KB, SRAM:224KB'。",
+    "  故 ram = (96+128)*1024 = 229376 字节 (官方脚注给出的可用上限; 96KB 只是另一档配置)。",
+    "  AT32F403A 的型号表按引脚码 V/R/C 展开成 AT32F403A{V,R,C}{G,E,C}T7 + QFN48 的 {G,E,C}U7。",
+    "AT32F407 (…/AT32F407.jsp): 与 403A 同表同脚注, 数字一致; 型号为 {V,R}{G,E,C}T7。",
+    "AT32F402 (…/AT32F402.jsp): Flash 128/256KB; SRAM 按容量码分列 B='64+6'KB=71680, C='96+6'KB=104448。",
+    "  型号 {C,R}{B,C}T7 与 U7 封装各一个。逐码直读, 不外推。",
+    "AT32F405 (…/AT32F405.jsp): 与 402 完全相同的容量表与型号结构。",
+    "AT32F413 (…/AT32F413.jsp): 总 Flash 64/128/256KB = 容量码 8/B/C;",
+    "  SRAM 行 '32 / 64 / 16 (configurable)', 脚注 2 以 AT32F413RCT7 为例标明 32KB 是 factory-shipping default。",
+    "  这里**取出厂默认 32KB=32768**而不是可配置上限 64KB —— 宁可少报也不放宽校验。",
+    "AT32F415 (…/AT32F415.jsp): Flash 64/128/256KB = 8/B/C; SRAM 整列 '32'KB = 32768。",
+    "  型号 C/R 的 {8,B,C}T7 与 K{8,B,C}U7, QFN32 的 K8U7-4 因引脚/容量码无法唯一切分而**未登记**。",
+    "AT32F421 (…/AT32F421.jsp): Flash 16/32/64KB = 4/6/8; SRAM 8/16/16KB。",
+    "  型号按引脚 C/K(均 T7)、F(TSSOP20, P7)、G(QFN32 4x4, U7) 展开;",
+    "  TSSOP20 的 'U7-4' 变体(引脚码 U 与 AT32F421 末位冲突)因无法唯一切分而**未登记**。",
+    "AT32F423 (…/AT32F423.jsp): Flash 64/128/256KB = 8/B/C; SRAM 32/48/48KB。",
+    "  型号 {C,R,V,T}{8,B,C}T7 + K{8,B,C}U7; U7-4/U7 的同码歧义组**未登记**。",
+    "AT32F435 (…/AT32F435.jsp): 总 Flash 256/448/960/1024/1984KB = 容量码 C/D/P/G/I;",
+    "  SRAM 行 '384KB(Default), Configurable up to 512KB' -> 取 512KB=524288。",
+    "  型号 {C,R,V,Z}{C,D,P,G,I}T7。**未登记**两处:",
+    "  (a) 容量码 M(=4032KB): 其型号写 'ZM'/'RM', 与两位容量码的切分规则冲突, 无法保证切对;",
+    "  (b) H7(BGA100) 表头写 'AT32F435xxH7' 但容量码行是 'RC/RD/RP/RG/RI/RM' (R=引脚),",
+    "      该列与 T7 组的对应关系在页面上不明确, 为避免猜错**整列不登记**。",
+    "AT32F437 (…/AT32F437.jsp): 与 435 同表;",
+    "  型号 {R,V}{C,D,P,G,I}T7 (该系列无 C/Z 封装的明确列)。容量码 M 同样未登记。",
+    "AT32WB415 (…/AT32WB415.jsp): 唯一型号 AT32WB415CCU7-7, 256KB Flash / 32KB SRAM。",
+    "",
+    "== 取舍原则 ==",
+    "所有数字都是产品页 Product Selector 表格中**对应型号那一列**的直接读数,",
+    "没有跨列取最大值, 也没有按封装外推 —— 宁可少报(可能拦住个别合法脚本), 绝不多报(会放行越界脚本)。",
+    "型号没登记 = xtcli 的 memory_for 查不到就返回 None, 直接**跳过校验**: 这是设计接受的退路,",
+    "比写一个猜测值安全得多。"
+  ],
+  "_probe_comment": "openocd interface 配置; 已核对本机 E:\\env\\msys64\\mingw64\\share\\openocd\\scripts\\interface 下这三个 cfg 确实存在。",
+  "probes": [
+    {
+      "name": "stlink",
+      "cfg": "interface/stlink.cfg"
+    },
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    },
+    {
+      "name": "jlink",
+      "cfg": "interface/jlink.cfg"
+    }
+  ]
+}

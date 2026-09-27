@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "vendor": "Raspberry Pi",
+  "_comment": [
+    "xtcli 的 Raspberry Pi RP2xxx 设备数据表 (暂存稿) —— 只放数据, 不放逻辑。",
+    "用途: 给 rp2040 / rp2350 工程补 -mcpu/-mfpu, 给出 openocd target 与烧录基址。",
+    "来源规则: 每个 cpu/fpu 的依据写在 families.<系列>._source; 每个容量数字的依据写在 _memory_comment / memory.<系列>._note; 查不到的键一律不写, 绝不猜 (工具对缺键系列跳过校验或确定性拒绝)。",
+    "families: RP2040 (双核 Cortex-M0+, 无 FPU) 与 RP2350 (双核 Cortex-M33, 带单精度 FPU) —— 两者内核完全不同, 必须分键; 都用数字结尾, 不触发 devices.py 的 subseries 守卫, 无需 subseries 声明。",
+    "RP2350 的另一个可选内核是 Hazard3 RISC-V: 同一颗芯片可配置为 Arm 或 RISC-V, 二选一由镜像/OTP 决定。本表只登记 Arm Cortex-M33 —— xtcli 的 gcc 后端只产出 Arm 工具链参数; 要做 RISC-V 目标必须另立工具链与表, 写到这里会给出错误的 -mcpu。",
+    "ocd: RP2040 有本机真实存在的 target/rp2040.cfg (同目录还有 rp2040-core0.cfg, 是只连 core0 的裁剪版)。RP2350 写 null —— 本机 OpenOCD 0.12.0 的 target 目录里只有 rp2040*.cfg 两个, 没有 rp2350.cfg (已用 pwsh 列目录核对); 拿 rp2040.cfg 顶替是未经验证的猜测, 会更糟: 它写死了 RP2040 的 DP ID (0x01002927) 与双核 dap 实例, 而 RP2350 的 DP ID 不同, 多半连不上或连错核。缺 ocd 时由 pyOCD 或显式 -OcdTarget 兜底。",
+    "probes: 只登记本机 scripts\\interface 里确实存在的 cfg。已核对: cmsis-dap.cfg 存在; 题目提到的 raspberrypi-swd.cfg **不存在** (本机 interface 目录里有 raspberrypi-native.cfg / raspberrypi2-native.cfg, 那是'用树莓派 40pin GPIO 当 bitbang SWD 适配器'的宿主方案, 不是 RP2 板上调试探针的常配, 故不列入默认探测顺序)。RP2040/RP2350 板上最常见的是 RP Debug Probe / picoprobe, 即 CMSIS-DAP。",
+    "flashBase 0x10000000: 两个系列 GP22xxx 片上都没有用户可编程 flash, 代码从外部 QSPI flash 经 XIP 映射执行, XIP 窗口基址就是 0x10000000。依据: (1) 本机 OpenOCD target/rp2040.cfg 第 66 行 'flash bank $_FLASHNAME rp2040_flash 0x10000000 ...'; (2) 树莓派 RP2040/RP2350 数据手册的地址映射章节 (rp2040: XIP_BASE 0x10000000, SRAM 0x20000000)。芯片侧不需要按系列覆盖, 故只用表级默认值。",
+    "ramBase 0x20000000: 两个系列的片上 SRAM 都从 0x20000000 起 (rp2040.cfg 的 work area 也在 0x20010000, 即 SRAM 内)。",
+    "故意没写的键: (1) memory 里**只有 ram, 没有 flash** —— 见 _memory_comment: 片上无 flash, 外部 QSPI 容量是板级事实 (Pico 2MB / Pico 2 4MB 等), 拿某个开发板的容量当'芯片容量'去校验链接脚本就是造假, 所以不写, 让校验走'缺键即跳过'的安全退路。(2) devicePattern: RP2xxx 命名里没有容量码可切, 写了只会把型号位当容量码, 整键不写。(3) density / arch / abi: 未查证 xtcli 对这两个厂商的取值约定, 不写。"
+  ],
+  "families": {
+    "RP2040": {
+      "cpu": "cortex-m0plus",
+      "fpu": "-mfloat-abi=soft",
+      "ocd": "target/rp2040.cfg",
+      "_source": "https://docs.micropython.org/en/latest/rp2/general.html (RP2040: 133 MHz dual ARM Cortex-M0+ cores, 264KB SRAM in six independent banks); https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf",
+      "_note": "Cortex-M0+ (ARMv6-M) 无 FPU, 故必须是 -mfloat-abi=soft, 不能给 -mfpu。ocd 依据: 本机 OpenOCD 0.12.0 scripts/target/rp2040.cfg 存在, 文件内自称 CHIPNAME rp2040 并建立 core0/core1 两个 target。"
+    },
+    "RP2350": {
+      "cpu": "cortex-m33",
+      "fpu": "-mfpu=fpv5-sp-d16 -mfloat-abi=hard",
+      "ocd": null,
+      "_source": "https://docs.micropython.org/en/latest/rp2/general.html (RP2350: Dual-core Arm Cortex-M33 or Hazard3 RISC-V processors at up to 150MHz, 520KB on-chip SRAM, up to 16MB off-chip Flash via QSPI); https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf",
+      "_note": "Cortex-M33 (ARMv8-M Mainline) 带单精度 FPU (FPv5-SP, 16 个双字寄存器), 故 fpv5-sp-d16 + hard; M33 的 FPU 只有单精度, 用 fpv5-d16 之类双精度写法是错的。ocd 写 null: 本机 OpenOCD 0.12.0 的 scripts/target 目录无 rp2350.cfg (已列目录核对, 只有 rp2040.cfg / rp2040-core0.cfg), rp2040.cfg 的 DP ID 与双核 dap 布局都是 RP2040 专有, 不可挪用。"
+    }
+  },
+  "flashBase": "0x10000000",
+  "ramBase": "0x20000000",
+  "_memory_comment": [
+    "== 本表 memory 为什么只有 ram、没有 flash ==",
+    "RP2040 与 RP2350 片上都没有内部用户 flash/EEPROM: 复位后 bootrom 从外部 QSPI flash (或 USB) 把镜像搬进 SRAM, 或者经 XIP 直接在 QSPI flash 上取指。",
+    "依据: MicroPython RP2 文档原文 'No internal Flash or EEPROM memory (after reset, the bootloader loads firmware from either the external flash memory or USB bus into internal SRAM)' 与 'QSPI bus controller, which supports up to 16 MB of external Flash memory'; RP2350 侧为 'Support for up to 16MB of off-chip Flash memory via QSPI'。",
+    "外部 QSPI flash 的实际容量是**板级**事实 (Raspberry Pi Pico 2MB, Pico 2 4MB, 第三方板 8/16MB 都有), 不是芯片属性。xtcli 的 memory 表用来校验链接脚本是否超出真机, 把某个开发板的容量写进去, 在另一块板子上就会给出错误的放过/拦下结论 —— 宁可缺键跳过校验, 不写。",
+    "ram 数值的算法: 264 KiB = 264*1024 = 270336 字节 (RP2040, 文档写 '264KB SRAM in six independent banks'); 520 KiB = 520*1024 = 532480 字节 (RP2350, 文档写 '520KB on-chip SRAM')。注意 264KB 不是 256KB, 520KB 不是 512KB, 这两个数常被开发板资料四舍五入, 这里按文档原值写。",
+    "!! 重要: 本表 models 里的条目**只有 ram 一个键**。xtcli/src/xtcli/devices.py 的 _model_sizes() 要求 flash 与 ram 同时是 int 才返回容量, 否则返回 None —— 也就是说这些条目的作用是'把已确证的 SRAM 容量记录在案 + 明确说明 flash 为什么不写', 实际容量校验会走'查不到就跳过'的安全退路。若日后拿到某块板的外部 QSPI 容量并愿意按板级建模, 请**另立板级表**, 不要往这张芯片表里加 flash。"
+  ],
+  "memory": {
+    "RP2040": {
+      "_note": "片上无 flash (外部 QSPI), 故意不写 flash 键; ram = 264 KiB = 270336 B, 出处见 _memory_comment。",
+      "models": {
+        "RP2040": {"ram": 270336}
+      }
+    },
+    "RP2350": {
+      "_note": "RP2350A (QFN-60) 与 RP2350B (QFN-80) 是同一颗硅片的两种封装, 片上 SRAM 都是 520 KiB, 区别只在 GPIO 数量 (30 / 48), 故并列三个型号键; 片上无 flash (外部 QSPI), 故意不写 flash 键。",
+      "models": {
+        "RP2350": {"ram": 532480},
+        "RP2350A": {"ram": 532480},
+        "RP2350B": {"ram": 532480}
+      }
+    }
+  },
+  "_probe_comment": "openocd interface 配置; doctor/burn 的默认探测顺序。只列本机确实存在的 cfg: interface/cmsis-dap.cfg (RP Debug Probe / picoprobe 等 CMSIS-DAP 探针)。raspberrypi-swd.cfg 本机不存在, 已核对。",
+  "probes": [
+    {
+      "name": "cmsis-dap",
+      "cfg": "interface/cmsis-dap.cfg"
+    }
+  ]
+}
