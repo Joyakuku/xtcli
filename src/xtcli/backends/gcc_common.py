@@ -33,11 +33,11 @@ def _check_fingerprint(model: ProjectModel) -> None:
     found = config_mk.read_fingerprint(config_path)
     expected = config_mk.fingerprint(model)
     if found is None:
-        log.warn("xtcli/config.mk 由本工具旧版本生成 (无指纹), 建议重新运行 stm32-init-pj")
+        log.warn("xtcli/config.mk 由本工具旧版本生成 (无指纹), 建议重新运行 xtcli-init-pj")
     elif found != expected:
         log.warn("xtcli/config.mk 与工程当前配置不一致 (陈旧或被改过)")
         log.info(f"  文件指纹 {found}   当前 {expected}")
-        log.info("  建议先运行 stm32-init-pj 重新生成, 否则可能编出与预期不符的固件")
+        log.info("  建议先运行 xtcli-init-pj 重新生成, 否则可能编出与预期不符的固件")
 
 
 def _artifact_path(model: ProjectModel, ext: str) -> Path:

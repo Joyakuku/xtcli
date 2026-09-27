@@ -22,7 +22,7 @@ class TestArgvContract(unittest.TestCase):
     def test_help_exits_zero(self):
         code, out = cli_output(["help"])
         self.assertEqual(code, int(Exit.OK))
-        self.assertIn("stm32-build-pj", out)
+        self.assertIn("xtcli-build-pj", out)
         self.assertIn("退出码", out)
 
     def test_help_flags(self):

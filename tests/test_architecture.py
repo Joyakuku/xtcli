@@ -177,6 +177,80 @@ class TestSingleEntryPoints(unittest.TestCase):
         self.assertIn("env.assets_dir()", text)
 
 
+class TestCommandNamesAreUnified(unittest.TestCase):
+    """命令名统一为 ``xtcli-{init,build,burn}-pj``（不带芯片前缀）。
+
+    为什么值得断言: 带前缀的名字 (`stm32-init-pj`) 会让人以为"只能编 STM32",
+    而它其实对**所有芯片**都适用 (后端按工程识别)。统一之后:
+    * 旧名字不许再出现在源码/文档里 —— 否则用户照着敲会 command not found;
+    * `setup.ps1` 生成的 shim 必须正好是这套新名字, 并且会**清理**旧 shim。
+    """
+
+    NEW_NAMES = ("xtcli-init-pj", "xtcli-build-pj", "xtcli-burn-pj")
+    OLD_NAMES = (
+        "stm32-init-pj", "stm32-build-pj", "stm32-burn-pj",
+        "esp32-init-pj", "esp32-build-pj", "esp32-burn-pj",
+    )
+
+    def _files(self) -> list[Path]:
+        return [
+            *SRC.rglob("*.py"),
+            REPO / "setup.ps1",
+            REPO / "README.md",
+            REPO / "docs" / "使用手册.md",
+            REPO / "docs" / "维护手册.md",
+        ]
+
+    def test_old_names_are_gone(self):
+        offenders: list[str] = []
+        for path in self._files():
+            text = path.read_text(encoding="utf-8")
+            # setup.ps1 里的 $staleShims 是**清理名单**: 它必须提到旧名字才能删掉它们
+            if path.name == "setup.ps1":
+                start = text.index("$staleShims = @(")
+                end = text.index("\n)\n", start) + 3
+                text = text[:start] + text[end:]
+            for old in self.OLD_NAMES:
+                if old in text:
+                    offenders.append(f"{path.relative_to(REPO)} -> {old}")
+        self.assertEqual(offenders, [], f"仍在使用已取消的旧命令名: {offenders}")
+
+    def test_new_names_are_documented(self):
+        for rel in ("README.md", "docs/使用手册.md"):
+            text = (REPO / rel).read_text(encoding="utf-8")
+            for name in self.NEW_NAMES:
+                with self.subTest(doc=rel, name=name):
+                    self.assertIn(name, text)
+
+    def test_setup_generates_exactly_the_new_shims(self):
+        text = (REPO / "setup.ps1").read_text(encoding="utf-8")
+        block = text[text.index("$shims = [ordered]@{"): text.index("foreach ($name in $shims.Keys)")]
+        self.assertIn("'xtcli-init-pj.cmd'", block)
+        self.assertIn("'xtcli-build-pj.cmd'", block)
+        self.assertIn("'xtcli-burn-pj.cmd'", block)
+        # 新 shim 不带 -Target: 默认 auto, 由工程识别后端
+        self.assertNotIn("-Target", block)
+        # 旧 shim 必须被清理 (否则 PATH 上两套入口并存)
+        self.assertIn("$staleShims", text)
+        for old in self.OLD_NAMES:
+            with self.subTest(old=old):
+                self.assertIn(f"'{old}'", text)
+
+    def test_help_lists_the_new_names(self):
+        import contextlib
+        import io
+
+        from xtcli import cli
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            cli.show_help()
+        help_text = buffer.getvalue()
+        for name in self.NEW_NAMES:
+            with self.subTest(name=name):
+                self.assertIn(name, help_text)
+
+
 class TestCommandSurfaceFrozen(unittest.TestCase):
     def test_verbs(self):
         from xtcli import cli

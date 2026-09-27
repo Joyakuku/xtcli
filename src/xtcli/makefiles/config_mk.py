@@ -79,10 +79,10 @@ def render(model: ProjectModel) -> str:
 
     lines: list[str] = [
         "# =============================================================================",
-        "#  xtcli 生成 —— 请勿手改; 重新生成请运行: stm32-init-pj",
+        "#  xtcli 生成 —— 请勿手改; 重新生成请运行: xtcli-init-pj",
         f"#  参数来源: {model.source}   配置: {model.config}   芯片: {model.device}",
         f"#  {FINGERPRINT_PREFIX} {fingerprint(model)}",
-        "#  (上面的指纹用于让 stm32-build-pj 发现本文件是否已与工程配置脱节)",
+        "#  (上面的指纹用于让 xtcli-build-pj 发现本文件是否已与工程配置脱节)",
         "# =============================================================================",
         "",
         f"TARGET      := {model.target}",

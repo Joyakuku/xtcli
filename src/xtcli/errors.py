@@ -1,6 +1,6 @@
 """退出码契约与结果对象。
 
-退出码是对外承诺, 脚本化调用（`stm32-build-pj && stm32-burn-pj`）依赖它,
+退出码是对外承诺, 脚本化调用（`xtcli-build-pj && xtcli-burn-pj`）依赖它,
 不得随意改动。与 PowerShell 版逐字一致。
 
 唯一一处刻意收紧: 自动识别与显式 ``-Target`` 都必须先通过工程的 detect 门槛。

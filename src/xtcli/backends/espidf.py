@@ -270,7 +270,7 @@ def action_init(ctx: Context) -> Result:
 def _check_stale_env(model: ProjectModel) -> None:
     path = model.root / "xtcli" / "idf-env.json"
     if not path.is_file():
-        log.info("提示: 尚未运行 stm32-init-pj/xtcli init, 直接用当前解析出的环境构建")
+        log.info("提示: 尚未运行 xtcli-init-pj, 直接用当前解析出的环境构建")
         return
     try:
         recorded = json.loads(path.read_text(encoding="utf-8", errors="replace"))

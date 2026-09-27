@@ -99,14 +99,17 @@ def show_help() -> None:
     text = f"""xtcli {__version__} —— 嵌入式工程 CLI
 
 用法:
-  stm32-init-pj  [选项]    初始化直到可编译
-  stm32-build-pj [选项]    构建
-  stm32-burn-pj  [选项]    烧录
+  xtcli-init-pj  [选项]    初始化直到可编译
+  xtcli-build-pj [选项]    构建
+  xtcli-burn-pj  [选项]    烧录
   xtcli-doctor   [选项]    体检环境与工程, 并给出确定性结论
-  pj-<动词>                同上, 但自动探测芯片 (-Target auto)
+  xtcli <动词>             同上 (动词: init / build / burn / doctor)
 
-全部命令作用于【当前目录】, 并会自动向上查找工程根
-(.cproject / Makefile / *.ioc / *.ewp / *.uvprojx / CMakeLists.txt)。
+命令名**不带芯片前缀**: 同一套命令处理所有芯片, 后端由工程本身自动识别
+(.cproject / *.ioc / *.ewp / *.uvprojx / Makefile / ESP-IDF CMakeLists.txt)。
+要强制指定后端用 -Target (例如 -Target stm32 / -Target espidf), 但它也必须先通过识别。
+
+全部命令作用于【当前目录】, 并会自动向上查找工程根。
 所以先 cd 到工程目录 (或它的子目录) 再运行。
 
 用于 init / build:
@@ -212,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         if extras:
             log.err(f"无法识别或不支持的参数: {' '.join(extras)}")
             log.info('本命令不接受"工程目录"参数 —— 始终作用于当前目录, 并自动向上查找工程根')
-            log.info("用法: cd 到工程目录, 然后运行 stm32-init-pj / stm32-build-pj / stm32-burn-pj")
+            log.info("用法: cd 到工程目录, 然后运行 xtcli-init-pj / xtcli-build-pj / xtcli-burn-pj")
             log.info("查看全部选项: xtcli help")
             return int(Exit.USAGE)
 

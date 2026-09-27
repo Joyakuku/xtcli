@@ -19,13 +19,13 @@ from .gcc_sources import collect_cpp_sources, collect_sources
 # ===========================================================================
 _XT_MAKEFILE = """# xtcli:generated
 # =============================================================================
-#  xtcli 生成的构建入口 (请勿手改; 重新生成请运行 stm32-init-pj)
-#    构建:  stm32-build-pj       等价于  make -C <工程根> -f xtcli/Makefile
-#    清理:  stm32-build-pj -Clean
+#  xtcli 生成的构建入口 (请勿手改; 重新生成请运行 xtcli-init-pj)
+#    构建:  xtcli-build-pj       等价于  make -C <工程根> -f xtcli/Makefile
+#    清理:  xtcli-build-pj -Clean
 #  路径相对工程根解析, 所以必须在工程根目录调用。
 # =============================================================================
 ifeq ($(notdir $(CURDIR)),xtcli)
-$(error 请在工程根目录执行 make, 或直接使用 stm32-build-pj)
+$(error 请在工程根目录执行 make, 或直接使用 xtcli-build-pj)
 endif
 
 XT_DIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
@@ -36,7 +36,7 @@ include $(XT_DIR)/rules.mk
 
 _ROOT_MAKEFILE = """# xtcli:generated
 # 转发到 xtcli/Makefile, 让裸 `make` 也能用。
-# 不需要就删掉本文件 —— stm32-build-pj 不依赖它。
+# 不需要就删掉本文件 —— xtcli-build-pj 不依赖它。
 include xtcli/Makefile
 """
 

@@ -179,7 +179,7 @@ def build_model(root: Path, opt: dict) -> ProjectModel:
             model.refusals.append(Refusal(
                 message="CubeMX 尚未生成代码 (缺 Core/Src)",
                 missing=["Core/Src/", "Core/Inc/", "Drivers/"],
-                next_step=f"先用 CubeMX 打开 {ioc_info.path} 生成代码, 再运行 stm32-init-pj",
+                next_step=f"先用 CubeMX 打开 {ioc_info.path} 生成代码, 再运行 xtcli-init-pj",
             ))
         else:
             model.refusals.append(Refusal(
@@ -313,7 +313,7 @@ def action_init(ctx: Context) -> Result:
 
     if model.source == "makefile":
         log.ok('该工程自带 Makefile, 按"优先复用已有构建系统"策略, 无需初始化')
-        log.info("stm32-build-pj 会直接调用工程自己的 Makefile")
+        log.info("xtcli-build-pj 会直接调用工程自己的 Makefile")
         return Result(code=int(Exit.OK), message="复用已有 Makefile")
 
     log.step(f"初始化 {model.root}")
@@ -400,7 +400,7 @@ def action_build(ctx: Context) -> Result:
     plan = _make_plan(model)
     if plan is None:
         log.err("找不到构建入口 (既无 xtcli/Makefile 也无根 Makefile)")
-        log.info("请先运行: stm32-init-pj")
+        log.info("请先运行: xtcli-init-pj")
         return Result(code=int(Exit.PROJECT), message="缺少构建入口")
 
     makefile, owned = plan
@@ -434,7 +434,7 @@ def action_build(ctx: Context) -> Result:
                 f"它的 clean 目标可能删除你的文件"
             )
             log.info(f"  确需清理请手动执行: make -C {model.root} -f {makefile} clean")
-            log.info("  想让 xtcli 管理清理, 请先运行 stm32-init-pj 生成它自己的构建入口")
+            log.info("  想让 xtcli 管理清理, 请先运行 xtcli-init-pj 生成它自己的构建入口")
         else:
             log.step(f"清理 ({makefile})")
             cleaned = exec.run([tools.make, *common, "clean"], cwd=model.root, prepend_path=xt_path)
@@ -541,7 +541,7 @@ def action_doctor(ctx: Context) -> Result:
                     log.ok(f"{probe.get('name')}  ({probe['cfg']}) 连上了")
                     config.remember_probe(cfg, probe.get("name", "?"), probe["cfg"])
                     config.save(cfg)
-                    log.info("已记住该探针, stm32-burn-pj 会直接复用")
+                    log.info("已记住该探针, xtcli-burn-pj 会直接复用")
                     probe_name = probe.get("name")
                     break
                 why = "超时" if tested.timed_out else f"退出码 {tested.exit_code}"

@@ -4,14 +4,16 @@
 不替换工程原有的构建体系，只在必要时补齐缺的东西。
 
 ```text
-stm32-init-pj   [选项]     初始化到"可编译"（必要时试编译一次）
-stm32-build-pj  [选项]     构建
-stm32-burn-pj   [选项]     烧录（+ 独立回读校验）
+xtcli-init-pj   [选项]     初始化到"可编译"（必要时试编译一次）
+xtcli-build-pj  [选项]     构建
+xtcli-burn-pj   [选项]     烧录（+ 独立回读校验）
 xtcli-doctor    [选项]     体检环境 / 工程，给确定性结论
 ```
 
-> 名字里的 `stm32` 是历史包袱：现在**同一套命令**也能处理 GD32 / AT32 / APM32 /
-> CH32V / RP2040 / nRF / SAM 等 ARM 与 RISC-V 工程，以及 ESP32（ESP-IDF）工程。
+> **命令名不带芯片前缀**：后端由工程本身自动识别（`.cproject` / `*.ioc` / `*.ewp` /
+> `*.uvprojx` / `Makefile` / ESP-IDF `CMakeLists.txt`），所以同一套命令处理
+> STM32 / GD32 / AT32 / APM32 / CH32V / RP2040 / nRF / SAM 与 ESP32。
+> 要强制指定后端加 `-Target`（如 `-Target stm32`、`-Target espidf`）。
 
 **文档**
 
@@ -60,14 +62,14 @@ xtcli-setup                 # 需要 pyOCD 时: xtcli-setup -Pyocd
 cd E:\path\to\myproject
 xtcli-doctor                # 看清工具链、芯片参数、内存布局、探针
 
-# 3) 初始化 → 构建 → 烧录
-stm32-init-pj               # CubeIDE/IAR/Keil/CubeMX 工程都走这条
-stm32-build-pj
-stm32-burn-pj
+# 3) 初始化 → 构建 → 烧录（同一套命令，芯片自动识别）
+xtcli-init-pj               # CubeIDE / IAR / Keil / CubeMX / ESP-IDF 都走这条
+xtcli-build-pj
+xtcli-burn-pj
 
-# ESP32 工程用 esp32-* 这组；不确定芯片用 pj-*（自动探测）
-esp32-init-pj; esp32-build-pj; esp32-burn-pj -Port COM7
-pj-build                    # 等价于 xtcli build -Target auto
+# ESP32 的 UART 烧录要串口；强制指定后端用 -Target
+xtcli-burn-pj -Port COM7
+xtcli-build-pj -Target espidf
 ```
 
 工具链搜索顺序：`XTCLI_ROOTS` 环境变量 → `xtcli.json` 的 `roots` → 内置默认根
@@ -83,14 +85,12 @@ pj-build                    # 等价于 xtcli build -Target auto
 
 ## 命令速查
 
-| 入口名（共 12 个，等价于同一套 CLI） | 等价命令 |
+| 入口名（共 6 个，等价于同一套 CLI） | 说明 |
 | --- | --- |
-| `xtcli <动词>` | `xtcli init/build/burn/doctor` |
-| `stm32-init-pj` / `stm32-build-pj` / `stm32-burn-pj` | `xtcli <动词> -Target stm32` |
-| `esp32-init-pj` / `esp32-build-pj` / `esp32-burn-pj` | `xtcli <动词> -Target espidf` |
-| `pj-init` / `pj-build` / `pj-burn` | `xtcli <动词>`（`-Target` 默认 `auto`） |
-| `xtcli-doctor` | `xtcli doctor` |
-| `xtcli-setup` | 运行 `setup.ps1`（建/修 venv） |
+| `xtcli-init-pj` / `xtcli-build-pj` / `xtcli-burn-pj` | `xtcli init/build/burn`；后端按工程自动识别，强制用 `-Target` |
+| `xtcli-doctor` | `xtcli doctor`（只读体检） |
+| `xtcli <动词>` | 同上（动词：`init` / `build` / `burn` / `doctor`） |
+| `xtcli-setup` | 运行 `setup.ps1`（建/修 venv，可选 `-Pyocd` / `-Force`） |
 
 常用选项（**完整表在使用手册**）：`-Target` `-Root` `-Config` `-Clean` `-NoBuild`
 `-NoStubs` `-MakeTarget` `-Interface` `-OcdTarget` `-ProbeSerial` `-Bin` `-Address`
