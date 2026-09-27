@@ -119,6 +119,11 @@ def _readback_verify(tools, interface_cfg: str, target_cfg: str, artifact: Path,
     """独立回读: 另开一个会话直接读芯片, 与固件开头比对。
 
     与 ``program ... verify`` 不同, 这条路径不经过烧写流程, 是**独立证据**。
+
+    **收尾必须是 ``reset run``**: 读内存要先 ``reset halt`` 把内核停住, 而
+    ``shutdown`` 只是关掉 openocd 服务, **不会**恢复运行。少了这一句, 烧录"成功"
+    退出的那一刻芯片是 halt 着的 —— 固件不跑, 板子上的 LED 不闪, 用户得手动按复位
+    (或拔电) 才恢复。实测踩过这个坑 (详见维护手册的事故表)。
     """
     expected = _read_artifact_words(tools, artifact)
     if expected is None:
@@ -128,7 +133,14 @@ def _readback_verify(tools, interface_cfg: str, target_cfg: str, artifact: Path,
     if tools.openocd_scripts:
         argv += ["-s", env.to_posix(tools.openocd_scripts)]
     argv += ["-f", interface_cfg, "-f", target_cfg]
-    argv += ["-c", "init", "-c", "reset halt", "-c", f"mdw {base} {len(expected)}", "-c", "shutdown"]
+    argv += [
+        "-c", "init",
+        "-c", "reset halt",
+        "-c", f"mdw {base} {len(expected)}",
+        # 读完把内核放回运行 —— 否则烧录的最后一个动作是"暂停 CPU"
+        "-c", "reset run",
+        "-c", "shutdown",
+    ]
     result = exec.run([tools.openocd, *argv], timeout=20, echo=False)
 
     match = None

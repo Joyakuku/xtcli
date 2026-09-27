@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import support  # noqa: F401  (导入即把 src 加入 sys.path)
 from xtcli import flash
-from xtcli.backends import gcc_make
+from xtcli.backends import gcc_burn, gcc_make
 from xtcli.discovery import Toolchain
 from xtcli.exec import RunResult
 from xtcli.model import Context, ProjectModel
@@ -141,6 +141,48 @@ class TestFlasherSelection(unittest.TestCase):
 
         with mock.patch("xtcli.flash.find_pyocd", return_value=None):
             self.assertEqual(gcc_make._resolve_flasher(_ctx(ocd_target="")), "openocd")
+
+
+class TestReadbackVerifyLeavesTargetRunning(unittest.TestCase):
+    """回归: 回读校验**最后必须复位运行**, 不能以 halt 收尾。
+
+    实测踩过的坑: 回读要 ``reset halt`` 才能稳定读内存, 而 ``shutdown`` 不会恢复
+    运行。少了收尾的 ``reset run``, 烧录"成功"退出时芯片是 halt 着的 —— 固件不跑、
+    板子 LED 不闪, 用户得手动按复位(或拔电)才恢复。这类副作用只有真机才暴露。
+    """
+
+    def _argv_from(self, return_value) -> list[str]:
+        from unittest import mock
+
+        tools = Toolchain()
+        tools.openocd = Path(r"C:\fake\openocd.exe")
+        artifact = Path(r"C:\fake\app.elf")
+        with mock.patch("xtcli.backends.gcc_burn._read_artifact_words", return_value=[0x2000C000, 0x080012F9]):
+            with mock.patch("xtcli.exec.run", return_value=return_value) as run:
+                gcc_burn._readback_verify(tools, "interface/stlink.cfg", "target/stm32f1x.cfg", artifact, "0x08000000")
+        return [str(x) for x in run.call_args.args[0]]
+
+    def test_ends_with_reset_run_before_shutdown(self):
+        argv = self._argv_from(RunResult(argv=[], exit_code=0, lines=["08000000:  2000c000 080012f9"]))
+        self.assertIn("-c", argv)
+        commands = [argv[i + 1] for i, token in enumerate(argv) if token == "-c"]
+        self.assertEqual(commands[-2:], ["reset run", "shutdown"], f"收尾必须复位运行: {commands}")
+        # 读内存之前仍然要 halt (运行中读会拿到不一致的快照)
+        self.assertEqual(commands[1], "reset halt")
+        self.assertTrue(commands[2].startswith("mdw "))
+
+    def test_verify_result_still_parsed(self):
+        ok, note = gcc_burn._readback_verify(
+            self._tools(), "interface/stlink.cfg", "target/stm32f1x.cfg", Path("app.elf"), "0x08000000"
+        )
+        self.assertTrue(ok)
+        self.assertIn("跳过", note)  # 桩环境下读不到固件开头 → 跳过而不是误判失败
+
+    @staticmethod
+    def _tools():
+        tools = Toolchain()
+        tools.openocd = Path(r"C:\fake\openocd.exe")
+        return tools
 
 
 class TestPyocdDiscovery(unittest.TestCase):
