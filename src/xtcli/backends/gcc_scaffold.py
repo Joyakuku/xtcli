@@ -19,13 +19,13 @@ from .gcc_sources import collect_cpp_sources, collect_sources
 # ===========================================================================
 _XT_MAKEFILE = """# xtcli:generated
 # =============================================================================
-#  xtcli 生成的构建入口 (请勿手改; 重新生成请运行 xtcli-init-pj)
-#    构建:  xtcli-build-pj       等价于  make -C <工程根> -f xtcli/Makefile
-#    清理:  xtcli-build-pj -Clean
+#  xtcli 生成的构建入口 (请勿手改; 重新生成请运行 xtcli-init)
+#    构建:  xtcli-build       等价于  make -C <工程根> -f xtcli/Makefile
+#    清理:  xtcli-build -Clean
 #  路径相对工程根解析, 所以必须在工程根目录调用。
 # =============================================================================
 ifeq ($(notdir $(CURDIR)),xtcli)
-$(error 请在工程根目录执行 make, 或直接使用 xtcli-build-pj)
+$(error 请在工程根目录执行 make, 或直接使用 xtcli-build)
 endif
 
 XT_DIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
@@ -36,7 +36,7 @@ include $(XT_DIR)/rules.mk
 
 _ROOT_MAKEFILE = """# xtcli:generated
 # 转发到 xtcli/Makefile, 让裸 `make` 也能用。
-# 不需要就删掉本文件 —— xtcli-build-pj 不依赖它。
+# 不需要就删掉本文件 —— xtcli-build 不依赖它。
 include xtcli/Makefile
 """
 
@@ -51,6 +51,10 @@ def _write_skeleton(model: ProjectModel, owned: managed.Owned) -> dict[str, obje
     owned.write_text(config_path, config_mk.render(model))
     rules_dst = xt_dir / "rules.mk"
     owned.copy_file(env.assets_dir() / "rules.mk", rules_dst)
+    # ABI 探针与 rules.mk 同寿命: build 之后的 abi-check 目标要用它做静态断言,
+    # 检查"编译期看到的库结构体大小"是否等于"真正链接进来的库对象大小"。
+    probe_dst = xt_dir / "abi-probe.c"
+    owned.copy_file(env.assets_dir() / "abi-probe.c", probe_dst)
     owned.write_text(xt_dir / "Makefile", _XT_MAKEFILE)
 
     root_makefile = model.root / "Makefile"
@@ -63,6 +67,7 @@ def _write_skeleton(model: ProjectModel, owned: managed.Owned) -> dict[str, obje
         "xt_dir": xt_dir,
         "config_mk": config_path,
         "rules_mk": rules_dst,
+        "abi_probe": probe_dst,
         "makefile": xt_dir / "Makefile",
         "root_makefile": root_created,
         "overwrote": overwrote,
@@ -179,6 +184,26 @@ def _copy_runtime_stubs(
     return copied
 
 
+def _nano_include_dir(model: ProjectModel, tools) -> Path | None:
+    """``--specs=nano.specs`` 在**编译期**的等价物: 把 newlib-nano 头目录加到搜索路径最前。
+
+    编译数据库的使用者 (cpptools / clangd) 不认 ``--specs=`` 这类 driver 选项, 硬塞
+    还可能让它把下一个参数当成取值 —— 所以这里放展开后的 ``-isystem <目录>``。
+    找不到目录就什么都不加 (只是编辑器视图与构建不一致, 不影响固件)。
+    """
+    if config_mk.runtime_lib(model) != config_mk.RUNTIME_LIB_NANO:
+        return None
+    root = getattr(tools, "gcc_root", None)
+    prefix = str(getattr(tools, "prefix", "") or "").rstrip("-")
+    if not root or not prefix:
+        return None
+    try:
+        candidate = Path(root).resolve().parent / prefix / "include" / "newlib-nano"
+    except OSError:  # pragma: no cover
+        return None
+    return candidate if candidate.is_dir() else None
+
+
 def _write_compile_commands(model: ProjectModel, tools, owned: managed.Owned) -> tuple[Path, int] | None:
     c_files, _ = collect_sources(model)
     cpp_files = collect_cpp_sources(model)
@@ -208,16 +233,25 @@ def _write_compile_commands(model: ProjectModel, tools, owned: managed.Owned) ->
 
     import json
 
+    # 与真实构建对齐的全局开关 (见 config_mk 里"必须成套"的说明):
+    #   * C 标准显式给出 —— 否则编辑器按自己的默认解析, 与构建不是一套语义;
+    #   * nano 的头目录展开成 -isystem (理由见 _nano_include_dir)。
+    nano_dir = _nano_include_dir(model, tools)
+    c_only = [flag for flag in (config_mk.c_std_flag(model),) if flag]
+    nano_flags = ["-isystem", env.to_posix(nano_dir)] if nano_dir else []
+
     cxx = tools.cxx or tools.cc
     pairs = [(path, tools.cc) for path in c_files] + [(path, cxx) for path in cpp_files]
     entries = []
     for path, compiler in pairs:
+        extra = list(nano_flags) + (c_only if compiler != cxx else [])
         entries.append({
             "directory": env.to_posix(model.root),
             "file": env.to_posix(path),
             "arguments": [
                 env.to_posix(compiler),
                 *cflags,
+                *extra,
                 "-c",
                 env.to_posix(path),
                 "-o",

@@ -172,31 +172,38 @@ set "PYTHONPATH=%XTCLI_HOME%\src;%PYTHONPATH%"
 exit /b %ERRORLEVEL%
 '@
 
+# 命令名 -> 动词 (+ 预设选项)。**单一出处是 src/xtcli/commands.py**;
+# tests/test_commands.py 会断言这张表与它逐项一致 —— 以后再改名不会再漏一处。
 $shims = [ordered]@{
-    'xtcli-init-pj.cmd'  = 'init'
-    'xtcli-build-pj.cmd' = 'build'
-    'xtcli-burn-pj.cmd'  = 'burn'
-    'xtcli-doctor.cmd'   = 'doctor'
-    'xtcli.cmd'          = ''
+    'xtcli-init.cmd'         = 'init'
+    'xtcli-build.cmd'        = 'build'
+    'xtcli-build-all.cmd'    = 'build -Clean'
+    'xtcli-burn.cmd'         = 'burn'
+    'xtcli-burn-openocd.cmd' = 'burn -Flasher openocd'
+    'xtcli-burn-flash.cmd'   = 'burn -Flasher pyocd'
+    'xtcli-doctor.cmd'       = 'doctor'
+    'xtcli.cmd'              = ''
 }
 foreach ($name in $shims.Keys) {
     $body = $shimBody.Replace('__VERB__', $shims[$name])
     Set-Content -LiteralPath (Join-Path $BinDir $name) -Value $body -Encoding ascii -NoNewline
 }
-# 统一的命令名不再带芯片前缀 (stm32-*/esp32-*/pj-* 是旧命名):
-# 留着旧 shim 会让人以为 "stm32- 只能编 STM32", 而新名默认自动识别后端。
-# 这里主动清掉自己上一版生成的旧名, 避免 PATH 上同时存在两套含义不同的入口。
+# 历史命令名一律清掉 (v1.0.0 起不再保留任何别名):
+#   * 芯片前缀命名 stm32-*/esp32-*: 会让人以为 "stm32- 只能编 STM32";
+#   * pj-* 与 xtcli-*-pj: 已统一为 xtcli-<动词>[/-all|-openocd|-flash]。
+# 不清掉的话, PATH 上会留下一批指向**已删除命令**的 shim, 敲了只会报"未知动作"。
 $staleShims = @(
     'stm32-init-pj', 'stm32-build-pj', 'stm32-burn-pj',
     'esp32-init-pj', 'esp32-build-pj', 'esp32-burn-pj',
-    'pj-init', 'pj-build', 'pj-burn'
+    'pj-init', 'pj-build', 'pj-burn',
+    'xtcli-init-pj', 'xtcli-build-pj', 'xtcli-burn-pj'
 )
 $removed = 0
 foreach ($stale in $staleShims) {
     $target = Join-Path $BinDir "$stale.cmd"
     if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Force; $removed++ }
 }
-if ($removed -gt 0) { Info "已清理 $removed 个旧命名的 shim (stm32-*/esp32-*/pj-*), 现在统一用 xtcli-*-pj" }
+if ($removed -gt 0) { Info "已清理 $removed 个历史命令名的 shim (stm32-*/esp32-*/pj-*/xtcli-*-pj)" }
 $setupShim = @'
 @echo off
 pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\setup.ps1" %*
@@ -208,7 +215,7 @@ Ok "已生成 $($shims.Count + 1) 个命令 shim -> $BinDir"
 # ---------------------------------------------------------------------------
 # 4b) MSYS2 侧的无后缀包装
 #     bash 查 PATH **不会**自动补 .cmd（只对 .exe 隐式补齐），所以 MSYS 终端里
-#     裸名 xtcli-build-pj 找不到文件。这里为每个 shim 生成同名无后缀包装:
+#     裸名 xtcli-build 找不到文件。这里为每个 shim 生成同名无后缀包装:
 #     内容只有 4 行, 按自身位置推出 ../bin/<name>.cmd（位置无关, 搬目录也不坏）。
 #     不需要 chmod: MSYS2 的 noacl 模式按 shebang 判定可执行（已实测）。
 # ---------------------------------------------------------------------------
@@ -272,7 +279,7 @@ if ($Pyocd) {
         if ($LASTEXITCODE -eq 0) {
             $v = & (Join-Path $PyocdVenv 'Scripts\pyocd.exe') --version 2>$null
             Ok "pyocd 安装完成 (v$v), 位于 $PyocdVenv"
-            Info '用它烧录: pj-burn -Flasher pyocd'
+            Info '用它烧录: xtcli-burn-flash   (或 xtcli-burn -Flasher pyocd)'
         } else {
             Warn2 'pyocd 安装失败 (不影响核心功能; 仍可用 openocd)'
         }
@@ -302,7 +309,7 @@ Write-Host ''
 if ($checkCode -eq 0) {
     Ok "自检通过: xtcli $($check[0])"
     Info "解释器: $VenvPy"
-    Info '把 bin 目录加入 PATH 后即可使用: xtcli-init-pj / xtcli-build-pj / xtcli-burn-pj / xtcli-doctor'
+    Info '把 bin 目录加入 PATH 后即可使用: xtcli-init / xtcli-build / xtcli-build-all / xtcli-burn / xtcli-burn-openocd / xtcli-burn-flash / xtcli-doctor'
     if ($XtDotSourced) { return } else { exit 0 }
 } else {
     Err2 "自检失败: $check"

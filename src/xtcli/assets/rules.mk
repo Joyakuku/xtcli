@@ -147,34 +147,119 @@ OBJS += $(foreach s,$(CXX_SRCS),$(call XT_OBJ,$(s)))
 OBJS += $(foreach s,$(ASM_SRCS),$(call XT_OBJ,$(s)))
 DEPS := $(OBJS:.o=.d)
 
+# ----------------------------------------------------------------------------
+# 参数一变就必须**全量重编**
+#
+# config.mk / rules.mk 是编译参数的唯一出处: 它们被重新生成 (xtcli-init) 或被
+# 手改时, 时间戳会变 —— 所有对象都依赖它们, 因此会跟着重编。
+#
+# 实测坑 (踩过): 重新 init 换上"成套开关"后直接 build, make 认为 09/26 编的旧 .o
+# 都还是最新的, 于是**只重链接** —— 固件里仍混着旧参数编出来的 TCB (616 B 而不是
+# 180 B), 而新编译的 ABI 探针会说"一致": 探针只能验证"当前参数自洽", 验证不了
+# "固件里的每个对象都是当前参数编的"。这条依赖才是那个缺口的正面堵法。
+# ----------------------------------------------------------------------------
+XT_PARAM_FILES := $(XT_DIR)/config.mk $(XT_DIR)/rules.mk
+$(OBJS): $(XT_PARAM_FILES)
+
 # 只有真的编译了 C++ 才链接 libstdc++ (放在 -lc 之前, 依赖顺序)
 XT_CXX_LIBS := $(if $(strip $(CXX_SRCS) $(CXX_SRCS_EXPLICIT)),-lstdc++,)
 
 # ----------------------------------------------------------------------------
 # 编译 / 链接选项
 # ----------------------------------------------------------------------------
-CFLAGS  = $(CPU) $(ARCH) $(FPU) $(C_DEFS) $(C_INCLUDES) $(OPT) $(DBG) \
+# ----------------------------------------------------------------------------
+# 全局语义开关 (runtime library / C 语言标准)
+#
+# 铁律: **SPECS 必须同时出现在 CFLAGS/CXXFLAGS/ASFLAGS/LDFLAGS**。
+# "只在链接出现"会让链接进来的库与编译时的头文件分成两套 ABI。实测事故:
+# 旧模板把 --specs=nano.specs 只写在 LDFLAGS, 于是链接 libc_nano
+# (struct _reent = 76 B) 而编译按标准 newlib 头 (512 B); FreeRTOS 每个 TCB
+# 白多背 436 B, 4 个任务 + 定时器队列把 4096 B 的堆顶爆 —— 板子完全没反应,
+# 而编译与烧录都不报错 (失败点在 vTaskStartScheduler 的 configASSERT 死循环)。
+#
+# CSTD 只进 C 编译 (g++ 收到 -std=gnu11 会告警, 它有自己的 CXXSTD 钩子);
+# 两个开关都由 config.mk 给出并进指纹 —— 不许靠"编译器当前默认"(GCC 14 默认
+# gnu17 / GCC 15 默认 gnu23, 换编译器就换语义, 而且这个差异曾经完全在指纹之外)。
+#
+# XT_REQUIRE_IN 在**解析期**生效: 谁把某个开关从某一处删掉, make 立刻以明确
+# 消息失败, 而不是静默编出 ABI 不一致的固件。
+# ----------------------------------------------------------------------------
+SPECS      ?= --specs=nano.specs
+CSTD       ?= -std=gnu11
+CXXSTD     ?=
+
+XT_REQUIRE_IN = $(if $(strip $(2)),$(if $(filter $(2),$($(1))),,$(error 编译/链接不对称: 「$(2)」不在 $(1) 里 —— 全局语义开关必须成套注入编译与链接, 见 xtcli 维护手册)),)
+
+# 展开这个变量 = 跑一次自检 (通过时为空串, 失败时 $(error) 中止 make)
+XT_FLAG_SELFCHECK = \
+  $(foreach f,$(SPECS),$(call XT_REQUIRE_IN,CFLAGS,$(f))$(call XT_REQUIRE_IN,CXXFLAGS,$(f))$(call XT_REQUIRE_IN,ASFLAGS,$(f))$(call XT_REQUIRE_IN,LDFLAGS,$(f))) \
+  $(foreach f,$(CSTD),$(call XT_REQUIRE_IN,CFLAGS,$(f)))
+
+CFLAGS  = $(CPU) $(ARCH) $(FPU) $(C_DEFS) $(C_INCLUDES) $(OPT) $(DBG) $(CSTD) $(SPECS) \
           -Wall -fmessage-length=0 -ffunction-sections -fdata-sections -MMD -MP
 
-# C++ 与 C 用同一套目标架构/包含/优化参数 (g++ 接受同样的选项)
-CXXFLAGS = $(CFLAGS)
+# C++ 与 C 共用目标架构/包含/优化参数; 但 -std 必须换掉 —— 给 g++ 传 -std=gnu11
+# 会告警 "valid for C/ObjC but not for C++"。需要时用 CXXSTD 显式给。
+CXXFLAGS = $(filter-out $(CSTD),$(CFLAGS)) $(CXXSTD)
 
-ASFLAGS = $(CPU) $(ARCH) $(FPU) $(OPT) $(DBG) -Wall -fmessage-length=0 -x assembler-with-cpp
+ASFLAGS = $(CPU) $(ARCH) $(FPU) $(OPT) $(DBG) $(SPECS) -Wall -fmessage-length=0 -x assembler-with-cpp
 
-LDFLAGS = $(CPU) $(ARCH) $(FPU) $(OPT) $(DBG) \
+LDFLAGS = $(CPU) $(ARCH) $(FPU) $(OPT) $(DBG) $(SPECS) \
+          -static \
           -T$(LDSCRIPT) \
           -Wl,-Map=$(OUT_DIR)/$(TARGET).map \
           -Wl,--gc-sections \
           -Wl,--print-memory-usage \
-          -static --specs=nano.specs \
           $(XT_CXX_LIBS) $(LIBDIR) $(LIBS)
 
 # ----------------------------------------------------------------------------
 # 规则
 # ----------------------------------------------------------------------------
-.PHONY: all clean size disasm dump flash flash-bin help
+# 显式钉死默认目标: 不带目标跑 `make` 时必须产出 elf/hex/bin。
+# 实测坑: 任何写在 `all:` **之前**的普通目标都会悄悄变成默认目标 —— 曾经因为
+# 插入一行 `$(OBJS): $(XT_PARAM_FILES)`, 裸 `make` 就只编了一个 .o 便"成功"返回,
+# 链接从未发生 (构建报成功但产物不存在)。这条声明让它不再依赖"谁排第一"。
+.DEFAULT_GOAL := all
+
+.PHONY: all check-flags show-flags abi-check clean size disasm dump flash flash-bin help
 
 all: $(OUT_DIR)/$(TARGET).elf $(OUT_DIR)/$(TARGET).hex $(OUT_DIR)/$(TARGET).bin
+
+# 全局开关自检 (elf 的前置依赖, 所以 build/flash/size 前都跑):
+# 展开 XT_FLAG_SELFCHECK 就等于断言"SPECS/CSTD 在编译与链接两边成套出现"。
+check-flags:
+	@echo "  FLAGS   全局开关: $(SPECS) $(CSTD)$(XT_FLAG_SELFCHECK)"
+
+# 观测: 打印真正生效的开关组合 —— 与 IDE 命令行核对、排障时的第一入口
+show-flags:
+	@echo "CC       = $(CC)"
+	@echo "CFLAGS   = $(CFLAGS)"
+	@echo "CXXFLAGS = $(CXXFLAGS)"
+	@echo "ASFLAGS  = $(ASFLAGS)"
+	@echo "LDFLAGS  = $(LDFLAGS)"
+
+# ----------------------------------------------------------------------------
+# ABI 哨兵: 用**与源码完全相同的 CFLAGS** 编译探针, 断言"编译期看到的库结构体
+# 大小"等于"真正链接进来的库对象大小" (后者由 xtcli 从 .map 读出 _impure_data
+# 后作为 XT_ABI_EXPECT_REENT 传入; 0 = 跳过)。
+#
+# 为什么必须有: 体积一致证明不了 ABI 一致 —— FreeRTOS 堆是 .bss 里的定长数组
+# (ucHeap[configTOTAL_HEAP_SIZE]), TCB 变大不改任何 section 一个字节, 于是
+# "黄金体积全绿而固件跑不起来"。这条哨兵才是那次事故的确定性闸门。
+# ----------------------------------------------------------------------------
+XT_ABI_PROBE        := $(XT_DIR)/abi-probe.c
+XT_ABI_EXPECT_REENT ?= 0
+
+ifeq ($(strip $(XT_ABI_EXPECT_REENT)),0)
+abi-check:
+	@echo "  ABI     跳过 (未指定期望值)"
+else
+abi-check:
+	@$(if $(wildcard $(XT_ABI_PROBE)),,$(error 缺少 ABI 探针 $(XT_ABI_PROBE) —— 请重新运行 xtcli-init))
+	@$(call MKDIR,$(BUILD_DIR))
+	@echo "  ABI     探针: 期望 sizeof(struct _reent) = $(XT_ABI_EXPECT_REENT) B"
+	@$(CC) $(CFLAGS) -DXT_ABI_EXPECT_REENT=$(XT_ABI_EXPECT_REENT) -c $(XT_ABI_PROBE) -o $(BUILD_DIR)/abi-probe.o
+endif
 
 .SECONDEXPANSION:
 $(BUILD_DIR)/%.o: $$(subst __,/,$$*).c
@@ -217,7 +302,7 @@ $(BUILD_DIR)/%.o: $$(subst __,/,$$*).C
 	@echo "  CXX     $<"
 	@$(CXX) -c $(CXXFLAGS) $< -o $@
 
-$(OUT_DIR)/$(TARGET).elf: $(OBJS) $(LDSCRIPT)
+$(OUT_DIR)/$(TARGET).elf: check-flags $(OBJS) $(LDSCRIPT)
 	@$(call MKDIR,$(OUT_DIR))
 	@echo "  LD      $@"
 	@$(CC) $(OBJS) $(LDFLAGS) -o $@
@@ -263,6 +348,7 @@ help:
 	@echo "make -j8        并行构建"
 	@echo "make size       查看 FLASH/RAM 占用"
 	@echo "make disasm     生成反汇编"
+	@echo "make show-flags 打印真正生效的编译/链接开关"
 	@echo "make flash      OpenOCD 烧录"
 	@echo "make clean      清理"
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from .. import config, devices, env, exec, flash, log
 from ..errors import Exit, Result
 from ..model import Context
-from .gcc_common import _artifact_path, _refusal_result
+from .gcc_common import _artifact_path, _refusal_result, artifact_is_stale, foreign_artifacts
 
 
 # ===========================================================================
@@ -207,6 +207,27 @@ def action_burn(ctx: Context) -> Result:
     if not artifact.is_file():
         log.err(f"构建后仍找不到固件: {artifact}")
         return Result(code=int(Exit.PROJECT), message="找不到固件")
+
+    # 实测坑: 旧实现只在"固件不存在"时才构建, 于是改完代码只跑 burn 会**静默**烧旧
+    # 固件 —— 而帮助文本 "-NoBuild  burn 时不自动构建" 还暗示默认会构建。现在:
+    # 固件比源/头/.ld 旧就先重建, -NoBuild 才跳过(并告警)。
+    if artifact_is_stale(model, artifact):
+        if opt.get("no_build"):
+            log.warn("固件比源文件旧, 但指定了 -NoBuild —— 直接烧现有固件")
+        else:
+            log.warn("固件比源文件旧 —— 先重新构建 (只烧现状用 -NoBuild)")
+            from .gcc_make import action_build
+
+            built = action_build(ctx)
+            if not built.ok:
+                return built
+
+    leftovers = foreign_artifacts(model)
+    if leftovers:
+        shown = ", ".join(path.name for path in leftovers[:4])
+        more = f" 等 {len(leftovers)} 个" if len(leftovers) > 4 else ""
+        log.warn(f"{model.out_dir}/ 里还有不属于本工程的产物: {shown}{more}")
+        log.info(f"  本次烧的是 {artifact.name}; 想清干净可以 xtcli-build -Clean")
 
     if _resolve_flasher(ctx) == "pyocd":
         return _burn_pyocd(ctx, artifact)

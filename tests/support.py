@@ -21,13 +21,22 @@ SRC = REPO / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-PS_LEGACY = REPO / "ps-legacy"
 PROJECTS = Path(r"E:\Code_workspace\freertos_workspace\software")
 
-# 三个参考工程的黄金值（text/data/bss），与 PowerShell 版逐字节一致
+# 三个参考工程的黄金值（text/data/bss）, 1.0.0 重新记录后的基线。
+#
+# 【2026-09-27 更新: 全局开关成套化】
+# 旧 rules.mk 把 --specs=nano.specs **只**放在 LDFLAGS: 链接的是 libc_nano
+# (struct _reent = 76 B), 编译却按标准 newlib 头 (512 B)。改成编译+链接成套注入后:
+#   * .text 变小 (sizeof(TCB_t) 的立即数/memset 变小): demo -104, 模板 -88;
+#   * **.bss/.data 一个字节都没变** —— FreeRTOS 堆是定长数组 (ucHeap[4096]),
+#     TCB 从 616 B 回到 180 B 在这里完全看不出来。这就是"体积一致证明不了
+#     ABI/内存一致"的直接证据, 也正是必须加 ABI 哨兵的原因
+#     (见 backends/gcc_common.check_abi_consistency 与 tests/test_flag_contract.py);
+#   * 1_LED 不用 FreeRTOS, 体积逐字节不变。
 GOLDEN_SIZE = {
-    "demo": (88076, 124, 25928),
-    "freertos_hal_template": (16904, 96, 6488),
+    "demo": (87972, 124, 25928),
+    "freertos_hal_template": (16816, 96, 6488),
     "1_LED": (5088, 12, 1068),
 }
 

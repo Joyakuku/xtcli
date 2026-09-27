@@ -9,6 +9,7 @@ CPU 为空的旧值, 目标架构退化成 armv4t, 报
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 from .. import env
@@ -29,6 +30,96 @@ def _arch_flags(model: ProjectModel) -> str:
     if model.abi:
         flags.append(f"-mabi={model.abi}")
     return " ".join(flags)
+
+
+# ---------------------------------------------------------------------------
+# 全局语义开关: 运行时库 (specs) 与 C 语言标准
+#
+# 这一族的开关有两条铁律 (由 rules.mk 的解析期自检 + tests/test_flag_contract.py 守):
+#
+#   1. **必须成套**: SPECS 要同时出现在 CFLAGS/CXXFLAGS/ASFLAGS/LDFLAGS。
+#      "只在链接出现"会让**链接进来的库**与**编译时的头文件**分成两套 ABI。
+#      实测事故: 旧模板把 ``--specs=nano.specs`` 只写在 LDFLAGS, 于是链接
+#      libc_nano (``struct _reent`` = 76 B) 而编译按标准 newlib 头 (512 B);
+#      FreeRTOS 每个 TCB 因此白多背 436 B, 4 个任务 + 定时器队列把 4096 B 的
+#      堆顶爆, 板子完全没反应 —— 而编译与烧录都不报错 (失败发生在
+#      ``vTaskStartScheduler`` 的 configASSERT 死循环里)。
+#   2. **不许用"编译器当前默认"**: 同一份代码换编译器就换语义 (GCC 14 默认
+#      gnu17 / GCC 15 默认 gnu23), 而且这个差异曾经完全在指纹之外 ——
+#      实测 ``DW_AT_producer`` 写着 ``GNU C23``, 而 CubeIDE 生成的工程是 gnu11。
+# ---------------------------------------------------------------------------
+RUNTIME_LIB_NANO = "nano"
+RUNTIME_LIB_STD = "std"
+DEFAULT_RUNTIME_LIB = RUNTIME_LIB_NANO
+NANO_SPECS = "--specs=nano.specs"
+DEFAULT_C_STD = "-std=gnu11"
+
+_STD_ALIASES = {"std": RUNTIME_LIB_STD, "standard": RUNTIME_LIB_STD, "full": RUNTIME_LIB_STD}
+_NANO_ALIASES = {"nano", "newlib-nano", "newlib_nano"}
+
+
+def runtime_lib(model: ProjectModel) -> str:
+    """运行时库选择: 工程声明优先, 否则用 xtcli 的默认 (nano)。
+
+    无论选哪一套, 都由 rules.mk **成套**注入编译与链接; 选择本身进指纹。
+    """
+    declared = str(model.extra.get("runtime_lib") or "").strip().lower()
+    if declared in _STD_ALIASES:
+        return RUNTIME_LIB_STD
+    if declared in _NANO_ALIASES:
+        return RUNTIME_LIB_NANO
+    if declared:
+        model.warnings.append(f"无法识别的运行时库声明 '{declared}', 已按默认 {DEFAULT_RUNTIME_LIB} 处理")
+    return DEFAULT_RUNTIME_LIB
+
+
+def specs_flag(model: ProjectModel) -> str:
+    """链接/编译共用的 ``--specs=...`` (选标准库时为空串)。"""
+    return NANO_SPECS if runtime_lib(model) == RUNTIME_LIB_NANO else ""
+
+
+def c_std_flag(model: ProjectModel) -> str:
+    """C 语言标准: 工程声明优先, 否则显式给 gnu11 (= CubeIDE 生成的值)。"""
+    declared = str(model.extra.get("c_std") or "").strip()
+    if declared:
+        return declared if declared.startswith("-std=") else f"-std={declared}"
+    return DEFAULT_C_STD
+
+
+def abi_switches(model: ProjectModel) -> str:
+    """按模型推算的开关摘要 (config.mk 还不存在时的兜底)。"""
+    lib = runtime_lib(model)
+    spec = specs_flag(model) or "(不用 specs, 标准库)"
+    return f"运行时库 {lib} {spec} | C 标准 {c_std_flag(model)}"
+
+
+# 注意用 [ \t] 而不是 \s: \s 会吃换行, 于是空值行 (SPECS       :=) 会把下一行
+# 当成它的取值 (实测踩过)。
+_SWITCH_LINE_RE = re.compile(r"^[ \t]*(RUNTIME_LIB|SPECS|CSTD)[ \t]*:?=[ \t]*(.*?)[ \t]*$", re.M)
+
+
+def configured_path(model: ProjectModel) -> Path:
+    """xtcli 生成的构建配置 (config.mk) 路径。"""
+    return model.root / "xtcli" / "config.mk"
+
+
+def effective_abi_switches(model: ProjectModel) -> str:
+    """日志/doctor 用的开关摘要 —— **以 config.mk 为准** (用户可能手改过它)。
+
+    只按模型推算会在"用户把 SPECS 置空改用标准库"时打印错的组合, 而这条打印正是
+    出问题时唯一的线索 (实测: 改了 config.mk 之后日志还写着 nano)。
+    """
+    try:
+        text = configured_path(model).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return abi_switches(model)
+    found = dict(_SWITCH_LINE_RE.findall(text))
+    if not found:
+        return abi_switches(model)
+    specs = found.get("SPECS", "")
+    lib = found.get("RUNTIME_LIB", "") or ("nano" if specs else "std")
+    c_std = found.get("CSTD", "")
+    return f"运行时库 {lib} {specs or '(不用 specs, 标准库)'} | C 标准 {c_std or '(编译器默认)'}"
 
 
 def fingerprint(model: ProjectModel) -> str:
@@ -52,6 +143,10 @@ def fingerprint(model: ProjectModel) -> str:
         str(model.ld_script or ""),
         ",".join(model.libs),
         ",".join(str(p) for p in model.lib_paths),
+        # 全局语义开关也决定产物的 ABI 与语义 —— 必须进指纹, 否则"工具默认值
+        # 变了而工程没重新 init"会被静默放过 (正是这次事故的形态)。
+        runtime_lib(model),
+        c_std_flag(model),
     ]
     # C++ 源文件也决定产物, 但只在真的有 C++ 时才加进指纹 ——
     # 这样纯 C 工程的指纹与旧版完全一致 (黄金体积测试依赖稳定性)。
@@ -79,10 +174,10 @@ def render(model: ProjectModel) -> str:
 
     lines: list[str] = [
         "# =============================================================================",
-        "#  xtcli 生成 —— 请勿手改; 重新生成请运行: xtcli-init-pj",
+        "#  xtcli 生成 —— 请勿手改; 重新生成请运行: xtcli-init",
         f"#  参数来源: {model.source}   配置: {model.config}   芯片: {model.device}",
         f"#  {FINGERPRINT_PREFIX} {fingerprint(model)}",
-        "#  (上面的指纹用于让 xtcli-build-pj 发现本文件是否已与工程配置脱节)",
+        "#  (上面的指纹用于让 xtcli-build 发现本文件是否已与工程配置脱节)",
         "# =============================================================================",
         "",
         f"TARGET      := {model.target}",
@@ -102,6 +197,12 @@ def render(model: ProjectModel) -> str:
         f"FPU         := {model.fpu}",
         f"OPT         := {model.opt}",
         f"DBG         := {model.dbg}",
+        "",
+        "# 全局语义开关 (runtime library / C 语言标准) —— 必须编译+链接成套;",
+        "# rules.mk 里有解析期自检, 只出现在链接行会直接报错而不是静默产出错固件。",
+        f"RUNTIME_LIB := {runtime_lib(model)}",
+        f"SPECS       := {specs_flag(model)}",
+        f"CSTD        := {c_std_flag(model)}",
         "",
         f"C_DEFS      := {' '.join(f'-D{d}' for d in model.defines if d)}",
     ]

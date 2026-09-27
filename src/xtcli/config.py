@@ -1,6 +1,7 @@
 """xtcli.json —— 工具版本缓存 / 探针缓存 / venv 环境记录。
 
-兼容 PowerShell 版写下的旧文件（没有 schema_version 与 env 段）。
+文件里的 ``schema_version`` 必须等于当前值, 否则整份缓存视为无效并重建
+（1.0.0 起不再读取任何历史格式）。
 """
 
 from __future__ import annotations
@@ -29,7 +30,8 @@ def load() -> dict[str, Any]:
     except (OSError, ValueError) as exc:
         warn(f"配置文件解析失败, 已忽略: {path} ({exc})")
         return _empty()
-    if not isinstance(raw, dict):
+    if not isinstance(raw, dict) or raw.get("schema_version") != SCHEMA_VERSION:
+        # 旧格式/被手改过: 直接丢弃, 让缓存自己重建 (缓存丢了只是慢, 不会错)
         return _empty()
 
     cfg = _empty()
@@ -39,8 +41,6 @@ def load() -> dict[str, Any]:
             cfg[key] = value
     if isinstance(raw.get("roots"), list):
         cfg["roots"] = raw["roots"]
-    schema = raw.get("schema_version")
-    cfg["schema_version"] = int(schema) if isinstance(schema, int) else 0
     return cfg
 
 

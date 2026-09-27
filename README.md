@@ -1,14 +1,24 @@
 # xtcli —— 多芯片嵌入式工程 CLI
 
+**version 1.0.0**（命令面自此冻结，见 [docs/CHANGELOG.md](docs/CHANGELOG.md)）
+
 对一个**已经存在**的嵌入式工程做 **初始化 → 构建 → 烧录 → 体检**，
 不替换工程原有的构建体系，只在必要时补齐缺的东西。
 
 ```text
-xtcli-init-pj   [选项]     初始化到"可编译"（必要时试编译一次）
-xtcli-build-pj  [选项]     构建
-xtcli-burn-pj   [选项]     烧录（+ 独立回读校验）
-xtcli-doctor    [选项]     体检环境 / 工程，给确定性结论
+xtcli-init          [选项]     初始化到"可编译"（必要时试编译一次）
+xtcli-build         [选项]     增量构建
+xtcli-build-all     [选项]     全量重建（= build -Clean）
+xtcli-burn          [选项]     烧录 + 独立回读校验（默认 openocd 链）
+xtcli-burn-openocd  [选项]     烧录：锁 openocd 链
+xtcli-burn-flash    [选项]     烧录：CMSIS-Pack flash 算法链（pyOCD）
+xtcli-doctor        [选项]     体检环境 / 工程，给确定性结论
 ```
+
+> **命令名 = 动词 + 预设选项的糖**：`xtcli-build-all -MakeTarget size` 等价于
+> `build -Clean -MakeTarget size`；`xtcli <动词>`（如 `xtcli build`）同样可用。
+> 命令名与预设选项的**唯一出处**是 `src/xtcli/commands.py`。
+> 1.0.0 起**不再提供任何别名**（`xtcli-setup` 会把 PATH 上的旧名一并清掉）。
 
 > **命令名不带芯片前缀**：后端由工程本身自动识别（`.cproject` / `*.ioc` / `*.ewp` /
 > `*.uvprojx` / `Makefile` / ESP-IDF `CMakeLists.txt`），所以同一套命令处理
@@ -21,6 +31,7 @@ xtcli-doctor    [选项]     体检环境 / 工程，给确定性结论
 | --- | --- | --- |
 | [docs/使用手册.md](docs/使用手册.md) | 使用者 | 安装、上手流程、全部命令与选项、工程形态矩阵、烧录、故障排查、会写哪些文件 |
 | [docs/维护手册.md](docs/维护手册.md) | 维护者 | 架构与不变量、加芯片/加后端/加架构的步骤、受管写入契约、测试闸门、发布检查、环境维护、历史教训 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 所有人 | 版本变更（1.0.0 起） |
 | 本文 | 所有人 | 定位、设计原则、快速开始、命令速查、能力与边界摘要 |
 
 ---
@@ -63,13 +74,13 @@ cd E:\path\to\myproject
 xtcli-doctor                # 看清工具链、芯片参数、内存布局、探针
 
 # 3) 初始化 → 构建 → 烧录（同一套命令，芯片自动识别）
-xtcli-init-pj               # CubeIDE / IAR / Keil / CubeMX / ESP-IDF 都走这条
-xtcli-build-pj
-xtcli-burn-pj
+xtcli-init               # CubeIDE / IAR / Keil / CubeMX / ESP-IDF 都走这条
+xtcli-build
+xtcli-burn
 
 # ESP32 的 UART 烧录要串口；强制指定后端用 -Target
-xtcli-burn-pj -Port COM7
-xtcli-build-pj -Target espidf
+xtcli-burn -Port COM7
+xtcli-build -Target espidf
 ```
 
 工具链搜索顺序：`XTCLI_ROOTS` 环境变量 → `xtcli.json` 的 `roots` → 内置默认根
@@ -87,7 +98,8 @@ xtcli-build-pj -Target espidf
 
 | 入口名（共 6 个，等价于同一套 CLI） | 说明 |
 | --- | --- |
-| `xtcli-init-pj` / `xtcli-build-pj` / `xtcli-burn-pj` | `xtcli init/build/burn`；后端按工程自动识别，强制用 `-Target` |
+| `xtcli-init` / `xtcli-build` / `xtcli-build-all` / `xtcli-burn` | `xtcli init/build/burn`（+ 预设选项）；后端按工程自动识别，强制用 `-Target` |
+| `xtcli-burn-openocd` / `xtcli-burn-flash` | `xtcli burn -Flasher openocd` / `… -Flasher pyocd`；锁死某一条烧录链 |
 | `xtcli-doctor` | `xtcli doctor`（只读体检） |
 | `xtcli <动词>` | 同上（动词：`init` / `build` / `burn` / `doctor`） |
 | `xtcli-setup` | 运行 `setup.ps1`（建/修 venv，可选 `-Pyocd` / `-Force`） |
@@ -120,14 +132,14 @@ xtcli-build-pj -Target espidf
 ## 开发与验证
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -t tests   # 285 项
+.\.venv\Scripts\python.exe -m unittest discover -s tests -t tests   # 321 项
 .\.venv\Scripts\python.exe -m ruff check src tests
 ```
 
 测试里有两类"闸门"必须保持绿：
 
 * **体积黄金值**：三个真实 STM32 工程的 `text/data/bss` 逐字节一致
-  （`demo` 88076/124/25928、`freertos_hal_template` 16904/96/6488、`1_LED` 5088/12/1068）；
+  （`demo` 87972/124/25928、`freertos_hal_template` 16816/96/6488、`1_LED` 5088/12/1068）；
 * **架构不变量**：零第三方依赖、分层、单模块 ≤700 行、data/assets 单一入口、命令面冻结。
 
 改接口或加后端前，请先读 [docs/维护手册.md](docs/维护手册.md)。
@@ -138,12 +150,14 @@ xtcli-build-pj -Target espidf
 
 ```text
 README.md  docs/  setup.ps1  pyproject.toml
-src/xtcli/            源码（31 个模块）
-src/xtcli/assets/     rules.mk 模板、运行时桩、链接脚本模板
+src/xtcli/            源码（32 个模块）
+src/xtcli/assets/     rules.mk 模板、abi-probe.c、运行时桩、链接脚本模板
 data/devices/         8 张芯片数据表（加芯片只改这里）
-tests/                23 个 test_*.py
-ps-legacy/            冻结的旧 PowerShell 实现（tests/test_parity_ps.py 用它当 oracle）
+tests/                24 个 test_*.py
 ```
+
+> 旧的 PowerShell 实现（`ps-legacy/`）与对等测试（`tests/test_parity_ps.py`）已在 1.0.0
+> 删除，历史留在 git 里（详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)）。
 
 **第三方文件与许可归属**（重要）：
 
@@ -158,4 +172,4 @@ ps-legacy/            冻结的旧 PowerShell 实现（tests/test_parity_ps.py �
 它们**不属于本项目的著作权范围**，本项目自身的许可不覆盖它们；
 如果你的工程自带这些文件，xtcli 也不会用模板覆盖（见"工具会写哪些文件"）。
 
-其余文件（`src/`、`data/`、`tests/`、`docs/`、`ps-legacy/`、`setup.ps1`）为项目自有内容。
+其余文件（`src/`、`data/`、`tests/`、`docs/`、`setup.ps1`）为项目自有内容。

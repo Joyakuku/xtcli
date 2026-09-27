@@ -1,8 +1,9 @@
 """CLI 入口: 参数解析 / 后端分发 / 退出码。
 
-对外契约逐字保持（与 PowerShell 版一致）:
+对外契约（`tests/test_cli.py` 逐条锁定）:
   * 退出码 0..7
-  * 命令名 stm32-*-pj / pj-* / xtcli-doctor
+  * 命令名 = xtcli-{init,build,build-all,burn,burn-openocd,burn-flash,doctor}
+    （单一出处: ``xtcli/commands.py``; 历史命令名由 xtcli-setup 从 PATH 清掉）
   * 选项拼写 -Clean / -NoBuild / ... （argparse 同时注册 -X 与 --x 两种写法）
   * **不接受"工程目录"位置参数** —— 一律作用于当前目录并自动向上找工程根
 """
@@ -15,7 +16,7 @@ import platform
 import sys
 from pathlib import Path
 
-from . import __version__, discovery, env, log, model, project
+from . import __version__, commands, discovery, env, log, model, project
 from .errors import Exit, Result, XtError
 
 VERBS = ("init", "build", "burn", "doctor")
@@ -55,6 +56,36 @@ def _fold_dash_value(argv: list[str], parser: argparse.ArgumentParser) -> list[s
     return folded
 
 
+def _value_options(parser: argparse.ArgumentParser) -> set[str]:
+    """需要取值的选项 (nargs != 0) —— 展开命令名时不能把它们的取值当命令名。"""
+    return {
+        option
+        for action in getattr(parser, "_actions", [])
+        for option in getattr(action, "option_strings", [])
+        if getattr(action, "nargs", None) != 0
+    }
+
+
+def _expand_chain(argv: list[str], parser: argparse.ArgumentParser) -> list[str]:
+    """把命令名 (``xtcli-build-all``) 展开成 ``动词 + 预设选项``。
+
+    命令名可能出现在选项之后 (``xtcli -Quiet build-all``), 所以按 token 扫描, 但
+    **跳过需要取值的选项的取值** —— 否则 ``-Root xtcli-build`` 之类会被误展开。
+    """
+    takes_value = _value_options(parser)
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token in takes_value:
+            index += 2
+            continue
+        expanded = commands.expand(token, argv[index + 1 :])
+        if expanded is not None:
+            return [*argv[:index], *expanded]
+        index += 1
+    return argv
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="xtcli", add_help=False, allow_abbrev=False)
     parser.add_argument("verb", nargs="?", default="help")
@@ -70,6 +101,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-NoBuild", "--no-build", dest="no_build", action="store_true")
     parser.add_argument("-NoStubs", "--no-stubs", dest="no_stubs", action="store_true",
                         help="不补齐 GCC 运行时桩 (syscalls/sysmem)")
+    parser.add_argument("-NoAbiCheck", "--no-abi-check", dest="no_abi_check", action="store_true",
+                        help="跳过编译/链接 ABI 一致性哨兵 (排障用; 默认开启)")
     parser.add_argument("-MakeTarget", "--make-target", dest="make_target", default="")
     parser.add_argument("-Interface", "--interface", dest="interface", default="")
     parser.add_argument("-OcdTarget", "--ocd-target", dest="ocd_target", default="")
@@ -96,18 +129,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def show_help() -> None:
+    # 命令表从 commands.py 生成 —— 帮助/文档/shim 只有一处定义, 改名不会漏
+    chain_lines = "\n".join(
+        f"  {chain.command:<20}{chain.summary}" for chain in commands.CHAINS
+    )
     text = f"""xtcli {__version__} —— 嵌入式工程 CLI
 
 用法:
-  xtcli-init-pj  [选项]    初始化直到可编译
-  xtcli-build-pj [选项]    构建
-  xtcli-burn-pj  [选项]    烧录
-  xtcli-doctor   [选项]    体检环境与工程, 并给出确定性结论
-  xtcli <动词>             同上 (动词: init / build / burn / doctor)
+{chain_lines}
+  xtcli <动词>       同上 (动词: init / build / burn / doctor)
 
 命令名**不带芯片前缀**: 同一套命令处理所有芯片, 后端由工程本身自动识别
 (.cproject / *.ioc / *.ewp / *.uvprojx / Makefile / ESP-IDF CMakeLists.txt)。
 要强制指定后端用 -Target (例如 -Target stm32 / -Target espidf), 但它也必须先通过识别。
+
+命令名只是"动词 + 预设选项"的糖, 所以后面照常跟自己的参数:
+  xtcli-build-all -MakeTarget size   ==  build -Clean -MakeTarget size
 
 全部命令作用于【当前目录】, 并会自动向上查找工程根。
 所以先 cd 到工程目录 (或它的子目录) 再运行。
@@ -118,6 +155,7 @@ def show_help() -> None:
   -Clean             先清理
   -NoBuild           init 时不试编译 / burn 时不自动构建
   -NoStubs          不补齐 GCC 运行时桩 (syscalls.c/sysmem.c)
+  -NoAbiCheck       跳过编译/链接 ABI 一致性哨兵 (排障用; 默认开启)
   -MakeTarget <t>    传给 make 的目标 (size / disasm / all ...)
 
 用于 burn:
@@ -173,6 +211,7 @@ def _collect_opt(args: argparse.Namespace) -> dict[str, object]:
         "clean": bool(args.clean),
         "no_build": bool(args.no_build),
         "no_stubs": bool(args.no_stubs),
+        "no_abi_check": bool(args.no_abi_check),
         "make_target": args.make_target,
         "interface": args.interface,
         "ocd_target": args.ocd_target,
@@ -193,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     raw_argv = _fold_dash_value(raw_argv, parser)
+    raw_argv = _expand_chain(raw_argv, parser)
     try:
         args, extras = parser.parse_known_args(raw_argv)
     except SystemExit as exc:
@@ -215,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         if extras:
             log.err(f"无法识别或不支持的参数: {' '.join(extras)}")
             log.info('本命令不接受"工程目录"参数 —— 始终作用于当前目录, 并自动向上查找工程根')
-            log.info("用法: cd 到工程目录, 然后运行 xtcli-init-pj / xtcli-build-pj / xtcli-burn-pj")
+            log.info("用法: cd 到工程目录, 然后运行 xtcli-init / xtcli-build / xtcli-burn")
             log.info("查看全部选项: xtcli help")
             return int(Exit.USAGE)
 

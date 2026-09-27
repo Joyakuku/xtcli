@@ -1,6 +1,6 @@
 [project]
 name = "xtcli"
-version = "0.2.0"
+version = "1.0.0"
 description = "嵌入式工程 CLI —— 初始化 / 构建 / 烧录, 按工具链生态划分后端"
 requires-python = ">=3.11"
 # 运行时零第三方依赖: 只用标准库。这样 venv 建好即可用, 全程可离线,

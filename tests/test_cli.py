@@ -1,6 +1,6 @@
 """CLI 契约单测: 退出码、命令面、拒绝位置参数。
 
-这些是**对外承诺**, 与 PowerShell 版逐字一致, 移植时不允许"顺手改进"。
+这些是**对外承诺**, 1.0.0 起冻结, 不允许"顺手改进"。
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class TestArgvContract(unittest.TestCase):
     def test_help_exits_zero(self):
         code, out = cli_output(["help"])
         self.assertEqual(code, int(Exit.OK))
-        self.assertIn("xtcli-build-pj", out)
+        self.assertIn("xtcli-build", out)
         self.assertIn("退出码", out)
 
     def test_help_flags(self):

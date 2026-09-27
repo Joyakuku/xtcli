@@ -50,6 +50,10 @@ from .gcc_common import (
     _check_fingerprint,
     _make_plan,
     _refusal_result,
+    artifact_is_stale,
+    check_abi_consistency,
+    foreign_artifacts,
+    stale_objects,
 )
 from .gcc_scaffold import (
     _copy_runtime_stubs,
@@ -179,7 +183,7 @@ def build_model(root: Path, opt: dict) -> ProjectModel:
             model.refusals.append(Refusal(
                 message="CubeMX 尚未生成代码 (缺 Core/Src)",
                 missing=["Core/Src/", "Core/Inc/", "Drivers/"],
-                next_step=f"先用 CubeMX 打开 {ioc_info.path} 生成代码, 再运行 xtcli-init-pj",
+                next_step=f"先用 CubeMX 打开 {ioc_info.path} 生成代码, 再运行 xtcli-init",
             ))
         else:
             model.refusals.append(Refusal(
@@ -313,7 +317,7 @@ def action_init(ctx: Context) -> Result:
 
     if model.source == "makefile":
         log.ok('该工程自带 Makefile, 按"优先复用已有构建系统"策略, 无需初始化')
-        log.info("xtcli-build-pj 会直接调用工程自己的 Makefile")
+        log.info("xtcli-build 会直接调用工程自己的 Makefile")
         return Result(code=int(Exit.OK), message="复用已有 Makefile")
 
     log.step(f"初始化 {model.root}")
@@ -400,7 +404,7 @@ def action_build(ctx: Context) -> Result:
     plan = _make_plan(model)
     if plan is None:
         log.err("找不到构建入口 (既无 xtcli/Makefile 也无根 Makefile)")
-        log.info("请先运行: xtcli-init-pj")
+        log.info("请先运行: xtcli-init")
         return Result(code=int(Exit.PROJECT), message="缺少构建入口")
 
     makefile, owned = plan
@@ -434,7 +438,7 @@ def action_build(ctx: Context) -> Result:
                 f"它的 clean 目标可能删除你的文件"
             )
             log.info(f"  确需清理请手动执行: make -C {model.root} -f {makefile} clean")
-            log.info("  想让 xtcli 管理清理, 请先运行 xtcli-init-pj 生成它自己的构建入口")
+            log.info("  想让 xtcli 管理清理, 请先运行 xtcli-init 生成它自己的构建入口")
         else:
             log.step(f"清理 ({makefile})")
             cleaned = exec.run([tools.make, *common, "clean"], cwd=model.root, prepend_path=xt_path)
@@ -450,11 +454,20 @@ def action_build(ctx: Context) -> Result:
         targets.append(make_target)
 
     label = f"{makefile}{', xtcli 生成' if owned else ', 工程自带'}"
+    if owned:
+        # 让"改了哪个全局开关"永远可见 (事故教训: 编译/链接的开关分叉是完全静默的)
+        log.info(f"全局开关  : {config_mk.effective_abi_switches(model)}")
     log.step(f"构建 ({label})")
     result = exec.run([tools.make, *common, *targets], cwd=model.root, prepend_path=xt_path)
     if result.exit_code == 0:
         if not make_target:
             _check_artifact_fresh(model, _artifact_path(model, "elf"))
+            if owned and not ctx.opt.get("no_abi_check"):
+                abi_problem = check_abi_consistency(
+                    model, tools, make_args=common, path_prefix=xt_path
+                )
+                if abi_problem is not None:
+                    return abi_problem
         return Result(code=int(Exit.OK), message="构建成功")
     log.err(f"构建失败 (make 退出码 {result.exit_code})")
     return Result(code=int(Exit.BUILD), message="构建失败", data={"exit_code": result.exit_code})
@@ -507,6 +520,11 @@ def action_doctor(ctx: Context) -> Result:
     for line in model.summary_lines():
         log.info(line)
 
+    # 全局语义开关: 体检时必须可见 —— 一旦它们不成套 (只出现在链接行), 产物就会
+    # 变成两套 ABI (历史事故见维护手册)。A 档工程由用户 Makefile 决定, 不在此列。
+    if model.source != "makefile":
+        log.info(f"全局开关    : {config_mk.effective_abi_switches(model)}")
+
     if model.refusals:
         log.step("确定性拒绝")
         for refusal in model.refusals:
@@ -541,7 +559,7 @@ def action_doctor(ctx: Context) -> Result:
                     log.ok(f"{probe.get('name')}  ({probe['cfg']}) 连上了")
                     config.remember_probe(cfg, probe.get("name", "?"), probe["cfg"])
                     config.save(cfg)
-                    log.info("已记住该探针, xtcli-burn-pj 会直接复用")
+                    log.info("已记住该探针, xtcli-burn 会直接复用")
                     probe_name = probe.get("name")
                     break
                 why = "超时" if tested.timed_out else f"退出码 {tested.exit_code}"
@@ -625,7 +643,9 @@ __all__ = [
     "action_doctor",
     "action_init",
     # 本文件定义
+    "artifact_is_stale",
     "build_model",
+    "check_abi_consistency",
     "collect_cpp_sources",
     "collect_sources",
     # 模块 (旧代码里以 gcc_make.exec / gcc_make.devices / gcc_make.config_mk / gcc_make.memmap 形式被引用)
@@ -638,6 +658,7 @@ __all__ = [
     "exec",
     "find_startup",
     "flash",
+    "foreign_artifacts",
     "get_traits",
     "iar_ewp",
     "ioc",
@@ -648,4 +669,5 @@ __all__ = [
     "memmap",
     "register",
     "resolve_ld_script",
+    "stale_objects",
 ]

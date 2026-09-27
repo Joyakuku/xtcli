@@ -1,12 +1,10 @@
 """退出码契约与结果对象。
 
-退出码是对外承诺, 脚本化调用（`xtcli-build-pj && xtcli-burn-pj`）依赖它,
-不得随意改动。与 PowerShell 版逐字一致。
+退出码是对外承诺, 脚本化调用（`xtcli-build && xtcli-burn`）依赖它,
+不得随意改动（`tests/test_cli.py` 逐条锁定）。
 
-唯一一处刻意收紧: 自动识别与显式 ``-Target`` 都必须先通过工程的 detect 门槛。
-PS 版允许显式 ``-Target`` 直接落到后端, 于是"只是恰好有用户 Makefile"的无关
-目录也会被当成工程并执行 ``make clean``。因此这类目录现在返回 5 (没有任何
-后端认得它), 而不是 4 (认出了工程形态但缺东西)。
+自动识别与显式 ``-Target`` 都必须先通过工程的 detect 门槛: "只是恰好有用户
+Makefile"的无关目录返回 5 (没有任何后端认得它), 而不是 4 (认出了工程形态但缺东西)。
 """
 
 from __future__ import annotations

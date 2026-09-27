@@ -28,6 +28,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import support  # noqa: F401  (把 src/ 放进 sys.path)
 
+from xtcli import commands
+
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "src" / "xtcli"
 
@@ -42,6 +44,8 @@ FROZEN_OPTIONS = {
     "-Clean", "--clean",
     "-NoBuild", "--no-build",
     "-NoStubs", "--no-stubs",
+    # 编译/链接 ABI 一致性哨兵 (事故: --specs 只在链接行 → 编译/链接两套 newlib ABI)
+    "-NoAbiCheck", "--no-abi-check",
     "-MakeTarget", "--make-target",
     "-Interface", "--interface",
     "-OcdTarget", "--ocd-target",
@@ -178,18 +182,19 @@ class TestSingleEntryPoints(unittest.TestCase):
 
 
 class TestCommandNamesAreUnified(unittest.TestCase):
-    """命令名统一为 ``xtcli-{init,build,burn}-pj``（不带芯片前缀）。
+    """命令名统一为 ``xtcli-<命令链>``（不带芯片前缀，1.0.0 收口）。
 
     为什么值得断言: 带前缀的名字 (`stm32-init-pj`) 会让人以为"只能编 STM32",
     而它其实对**所有芯片**都适用 (后端按工程识别)。统一之后:
-    * 旧名字不许再出现在源码/文档里 —— 否则用户照着敲会 command not found;
-    * `setup.ps1` 生成的 shim 必须正好是这套新名字, 并且会**清理**旧 shim。
+    * 历史命令名不许再出现在源码/文档里 —— 否则用户照着敲会 command not found;
+    * `setup.ps1` 生成的 shim 必须正好是命令表里的那套, 并且会**清理**历史 shim;
+    * 命令名与预设选项的唯一出处是 ``xtcli/commands.py`` (细项由 test_commands.py 守)。
     """
 
-    NEW_NAMES = ("xtcli-init-pj", "xtcli-build-pj", "xtcli-burn-pj")
     OLD_NAMES = (
         "stm32-init-pj", "stm32-build-pj", "stm32-burn-pj",
         "esp32-init-pj", "esp32-build-pj", "esp32-burn-pj",
+        "xtcli-init-pj", "xtcli-build-pj", "xtcli-burn-pj",
     )
 
     def _files(self) -> list[Path]:
@@ -215,19 +220,19 @@ class TestCommandNamesAreUnified(unittest.TestCase):
                     offenders.append(f"{path.relative_to(REPO)} -> {old}")
         self.assertEqual(offenders, [], f"仍在使用已取消的旧命令名: {offenders}")
 
-    def test_new_names_are_documented(self):
+    def test_every_command_is_documented(self):
         for rel in ("README.md", "docs/使用手册.md"):
             text = (REPO / rel).read_text(encoding="utf-8")
-            for name in self.NEW_NAMES:
-                with self.subTest(doc=rel, name=name):
-                    self.assertIn(name, text)
+            for chain in commands.CHAINS:
+                with self.subTest(doc=rel, command=chain.command):
+                    self.assertIn(chain.command, text)
 
-    def test_setup_generates_exactly_the_new_shims(self):
+    def test_setup_generates_exactly_the_table_shims(self):
         text = (REPO / "setup.ps1").read_text(encoding="utf-8")
         block = text[text.index("$shims = [ordered]@{"): text.index("foreach ($name in $shims.Keys)")]
-        self.assertIn("'xtcli-init-pj.cmd'", block)
-        self.assertIn("'xtcli-build-pj.cmd'", block)
-        self.assertIn("'xtcli-burn-pj.cmd'", block)
+        for chain in commands.CHAINS:
+            with self.subTest(command=chain.command):
+                self.assertIn(f"'{chain.command}.cmd'", block)
         # 新 shim 不带 -Target: 默认 auto, 由工程识别后端
         self.assertNotIn("-Target", block)
         # 旧 shim 必须被清理 (否则 PATH 上两套入口并存)
@@ -236,7 +241,7 @@ class TestCommandNamesAreUnified(unittest.TestCase):
             with self.subTest(old=old):
                 self.assertIn(f"'{old}'", text)
 
-    def test_help_lists_the_new_names(self):
+    def test_help_lists_every_command(self):
         import contextlib
         import io
 
@@ -246,9 +251,9 @@ class TestCommandNamesAreUnified(unittest.TestCase):
         with contextlib.redirect_stdout(buffer):
             cli.show_help()
         help_text = buffer.getvalue()
-        for name in self.NEW_NAMES:
-            with self.subTest(name=name):
-                self.assertIn(name, help_text)
+        for chain in commands.CHAINS:
+            with self.subTest(command=chain.command):
+                self.assertIn(chain.command, help_text)
 
 
 class TestCommandSurfaceFrozen(unittest.TestCase):
